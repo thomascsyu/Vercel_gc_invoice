@@ -1,0 +1,66 @@
+### 2. User Management (Admin)
+- Admin-only CRUD for user accounts
+- Role assignment (`user` / `admin`)
+- One-time admin bootstrap via `/api/setup`
+
+### 3. Client Management
+- Full CRUD operations with pagination and sorting
+- Auto-generated client codes (e.g., "AC001")
+- Search and filter (active/inactive)
+- ISO certifications tracking
+- CSV import/export
+- Bulk delete and bulk mark-inactive
+
+### 4. Consultant Management
+- CRUD with auto-seeded defaults (TY, PL, PW)
+- Short code assignment
+- Assignment to invoices for revenue tracking
+
+### 5. Invoice System
+- **Status workflow** (session API): Draft → Pending approval → Approved → Sent → Revised → Paid (there is no separate “viewed” step in the status model)
+- Line items with quantity, price, tax rate
+- Discount support (percentage or fixed)
+- Multi-currency (HKD, USD, CNY, MOP)
+- Consultant assignment (up to 3)
+- PDF generation with company branding
+- Auto-generated invoice numbers (YYMM-NNN)
+- Email invoice PDF to client (SMTP or Gmail API)
+- Send payment reminder emails
+- Bulk delete and bulk status updates
+- CSV import/export
+
+### 6. Quotation System
+- **Status workflow** (session API): Draft → Pending approval → Sent → Approved → Confirmed or Canceled (no “viewed” step)
+- Convert to Invoice, convert to Job Order only, or **Confirm-and-Convert** (creates both Invoice and Job Order in one step)
+- Convert to Job Order
+- Lookup by quotation number
+- Line items management with remarks and terms
+- PDF generation and email delivery
+- Reusable quotation templates
+- Auto-generated quotation numbers (QYYMM-NNN)
+
+### 7. Job Orders
+- Manual creation and edit
+- Convert from Quotation or from Invoice
+- **AI PDF Extraction** using DeepSeek API
+- Extract company info and line items from uploaded PDFs
+- PDF generation and email delivery
+- Auto-generated job order numbers (JOYYMM-NNN)
+
+### 8. Payment Tracking
+- Record payments against invoices
+- Multiple payment methods (bank transfer, cash, check, credit card, other)
+- Auto-update invoice paid status
+- Payment reversal (delete) with automatic status rollback
+- Receipt file upload per payment
+
+### 9. Recurring Invoices
+- Schedule invoices to recur on a defined frequency
+- Enable/disable individual schedules
+- Batch-process all due recurring invoices via single endpoint
+
+### 10. Revenue Dashboard
+- Summary stats card (revenue, invoices, quotations, payments)
+- Monthly revenue bar chart
+- Revenue by consultant breakdown
+- Year selector

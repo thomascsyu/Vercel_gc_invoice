@@ -1,0 +1,60 @@
+# GC-INV on an Alibaba Cloud Simple Application Server (Ubuntu 24.04, Hong Kong).
+# From this directory, after copying env.example to .env:
+#   docker compose --profile local-db up -d --build
+#
+# Postgres runs on this server (the local-db profile). The database port is
+# not published. DATABASE_URL uses hostname "postgres".
+
+services:
+  app:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    environment:
+      # Built from POSTGRES_* so the password is not duplicated in DATABASE_URL.
+      DATABASE_URL: postgresql://${POSTGRES_USER:-gc_inv}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-gc_inv}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      # nginx on the host is the only client. Do not publish 8080 on 0.0.0.0.
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ${GC_INV_UPLOAD_DIR:-/var/lib/gc-inv/uploads}:/data
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:8080/api/readyz').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+
+  postgres:
+    profiles: ["local-db"]
+    image: public.ecr.aws/docker/library/postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-gc_inv}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+      POSTGRES_DB: ${POSTGRES_DB:-gc_inv}
+    volumes:
+      - ${GC_INV_PG_DIR:-/var/lib/gc-inv/postgres}:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-gc_inv} -d ${POSTGRES_DB:-gc_inv}",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    # Not published to the host network. The app reaches it as hostname "postgres".

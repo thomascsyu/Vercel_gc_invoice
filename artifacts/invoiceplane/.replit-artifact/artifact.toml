@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "InvoicePlane SaaS"
+version = "1.0.0"
+id = "artifacts/invoiceplane"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 18792
+
+[services.development]
+run = "pnpm --filter @workspace/invoiceplane run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/invoiceplane", "run", "build" ]
+publicDir = "artifacts/invoiceplane/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "18792"
+BASE_PATH = "/"

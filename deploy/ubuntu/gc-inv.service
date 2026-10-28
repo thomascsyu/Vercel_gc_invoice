@@ -1,0 +1,26 @@
+# Optional. Docker's restart policy already brings the container back after a
+# reboot once it has been started. Use this unit if you want systemctl to own
+# the compose project.
+#
+#   sudo cp deploy/ubuntu/gc-inv.service /etc/systemd/system/gc-inv.service
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now gc-inv
+#
+# Edit WorkingDirectory if the repo is not in /opt/gc-inv.
+
+[Unit]
+Description=GC-INV (Docker Compose)
+After=docker.service network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/gc-inv/deploy/ubuntu
+# Rebuild after code updates: docker compose --profile local-db up -d --build
+ExecStart=/usr/bin/docker compose --profile local-db up -d
+ExecStop=/usr/bin/docker compose --profile local-db stop
+TimeoutStartSec=0
+
+[Install]
+WantedBy=multi-user.target

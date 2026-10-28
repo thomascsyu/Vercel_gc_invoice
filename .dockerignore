@@ -1,0 +1,14 @@
+node_modules
+artifacts/*/node_modules
+lib/*/node_modules
+artifacts/mockup-sandbox
+**/dist
+# Allow a prebuilt frontend in the context. The Dockerfile rebuilds it anyway.
+!artifacts/invoiceplane/dist
+!artifacts/invoiceplane/dist/**
+**/.env
+.git
+.gitignore
+README.md
+replit.md
+.local

@@ -1,0 +1,1443 @@
+# InvoicePlane SaaS - Cloud Invoicing & Business Management
+
+A comprehensive cloud-based SaaS application for invoicing, quotation management, job orders, and business analytics. Converted from a macOS Swift desktop application to a modern web-based solution.
+
+![InvoicePlane](https://img.shields.io/badge/InvoicePlane-SaaS-blue)
+![React](https://img.shields.io/badge/React-19.x-61DAFB)
+![FastAPI](https://img.shields.io/badge/FastAPI-Python-009688)
+![MongoDB](https://img.shields.io/badge/MongoDB-Database-47A248)
+
+---
+
+## 📋 Table of Contents
+
+- [Technology Stack](#-technology-stack)
+- [Features](#-features)
+- [Database Schema](#-database-schema)
+- [API Reference](#-api-reference)
+- [Backend Functions](#-backend-functions)
+- [Frontend Structure](#-frontend-structure)
+- [Business Logic & Workflows](#-business-logic--workflows)
+- [Key Variables](#-key-variables)
+- [Getting Started](#-getting-started)
+- [Test Credentials](#-test-credentials)
+
+---
+
+## 🛠 Technology Stack
+
+### Backend
+| Technology | Version | Purpose |
+|------------|---------|---------|
+| **Python** | 3.11+ | Programming Language |
+| **FastAPI** | Latest | Web Framework (main app in `backend/server.py`; PDF helpers in `backend/pdf_helpers.py`) |
+| **Motor** | Latest | Async MongoDB Driver |
+| **MongoDB** | Latest | NoSQL Database |
+| **PyJWT** | Latest | JWT Authentication |
+| **bcrypt** | Latest | Password Hashing |
+| **ReportLab** | 4.x | PDF Generation |
+| **Pydantic** | 2.x | Data Validation |
+| **aiofiles** | Latest | Async File Operations |
+| **OpenAI** | Latest | DeepSeek API Client |
+| **PyPDF2** | 3.x | PDF Text Extraction |
+
+### Frontend
+| Technology | Version | Purpose |
+|------------|---------|---------|
+| **React** | 19.x | UI Framework |
+| **JavaScript/JSX** | ES6+ | Programming Language |
+| **Tailwind CSS** | 4.x | Styling Framework |
+| **Shadcn/UI** | Latest | Component Library |
+| **Recharts** | 3.x | Charts & Graphs |
+| **Axios** | Latest | HTTP Client |
+| **React Router** | 6.x | Client-side Routing |
+| **TanStack React Query** | Latest | Server State Management |
+| **Sonner** | Latest | Toast Notifications |
+| **Lucide React** | Latest | Icons |
+
+### Infrastructure
+| Technology | Purpose |
+|------------|---------|
+| **Supervisor** | Process Management |
+| **Uvicorn** | ASGI Server |
+| **Starlette GZipMiddleware** | Compresses responses (minimum size 500 bytes) |
+| **CRACO** | React Build Tool |
+
+---
+
+## ✨ Features
+
+### 1. Authentication System
+- JWT-based authentication with httpOnly cookies
+- User registration (invite-code-gated when users exist) and login
+- Access token (60 min) + Refresh token (7 days)
+- Protected routes with auto token refresh
+- Rate-limited login endpoint
+
+### 2. User Management (Admin)
+- Admin-only CRUD for user accounts
+- Role assignment (`user` / `admin`)
+- One-time admin bootstrap via `/api/setup`
+
+### 3. Client Management
+- Full CRUD operations with pagination and sorting
+- Auto-generated client codes (e.g., "AC001")
+- Search and filter (active/inactive)
+- ISO certifications tracking
+- CSV import/export
+- Bulk delete and bulk mark-inactive
+
+### 4. Consultant Management
+- CRUD with auto-seeded defaults (TY, PL, PW)
+- Short code assignment
+- Assignment to invoices for revenue tracking
+
+### 5. Invoice System
+- **Status workflow** (session API): Draft → Pending approval → Approved → Sent → Revised → Paid (there is no separate “viewed” step in the status model)
+- Line items with quantity, price, tax rate
+- Discount support (percentage or fixed)
+- Multi-currency (HKD, USD, CNY, MOP)
+- Consultant assignment (up to 3)
+- PDF generation with company branding
+- Auto-generated invoice numbers (YYMM-NNN)
+- Email invoice PDF to client (SMTP or Gmail API)
+- Send payment reminder emails
+- Bulk delete and bulk status updates
+- CSV import/export
+
+### 6. Quotation System
+- **Status workflow** (session API): Draft → Pending approval → Sent → Approved → Confirmed or Canceled (no “viewed” step)
+- Convert to Invoice, convert to Job Order only, or **Confirm-and-Convert** (creates both Invoice and Job Order in one step)
+- Convert to Job Order
+- Lookup by quotation number
+- Line items management with remarks and terms
+- PDF generation and email delivery
+- Reusable quotation templates
+- Auto-generated quotation numbers (QYYMM-NNN)
+
+### 7. Job Orders
+- Manual creation and edit
+- Convert from Quotation or from Invoice
+- **AI PDF Extraction** using DeepSeek API
+- Extract company info and line items from uploaded PDFs
+- PDF generation and email delivery
+- Auto-generated job order numbers (JOYYMM-NNN)
+
+### 8. Payment Tracking
+- Record payments against invoices
+- Multiple payment methods (bank transfer, cash, check, credit card, other)
+- Auto-update invoice paid status
+- Payment reversal (delete) with automatic status rollback
+- Receipt file upload per payment
+
+### 9. Recurring Invoices
+- Schedule invoices to recur on a defined frequency
+- Enable/disable individual schedules
+- Batch-process all due recurring invoices via single endpoint
+
+### 10. Revenue Dashboard
+- Summary stats card (revenue, invoices, quotations, payments)
+- Monthly revenue bar chart
+- Revenue by consultant breakdown
+- Year selector
+
+### 11. Company Settings
+- Company information and two bank accounts configuration
+- Logo upload (company logo + header logo), optional per-logo scale (`company_logo_scale`, `header_logo_scale`), and signature image upload (`signature_image`)
+- AI API configuration (DeepSeek/OpenAI-compatible)
+- Default currency setting
+- Gmail service account upload/removal
+- SMTP or Gmail API email accounts
+
+### 12. Public REST API (v1)
+- API key management (admin generate/revoke)
+- `X-API-Key` authenticated endpoints for clients, invoices, quotations, job orders, and payments
+
+---
+
+## 🗄 Database Schema
+
+### Collections Overview
+
+```
+MongoDB Database: invoiceplane
+├── users                  # User accounts
+├── clients                # Client/customer records
+├── consultants            # Team members
+├── invoices               # Invoice documents
+├── quotations             # Quotation documents
+├── quotation_templates    # Reusable quotation templates
+├── job_orders             # Job order documents
+├── payments               # Payment records
+├── recurring_invoices     # Recurring invoice schedules
+├── uploaded_files         # Base64 copies of uploads (logos, receipts) for restore after restart
+└── company_settings       # Company configuration (includes public API key material for v1)
+```
+
+### Collection Schemas
+
+#### `users`
+```javascript
+{
+  _id: ObjectId,
+  email: String,           // Unique, lowercase
+  password_hash: String,   // bcrypt hashed
+  name: String,
+  role: String,            // "user" | "admin"
+  created_at: DateTime
+}
+```
+
+#### `clients`
+```javascript
+{
+  _id: ObjectId,
+  client_code: String,     // Auto: "ABC001"
+  name: String,
+  address_line1: String,
+  address_line2: String,
+  address_line3: String,
+  address_line4: String,
+  city: String,
+  country: String,
+  contact_person: String,
+  phone: String,
+  email: String,
+  vat_id: String,
+  tax_code: String,
+  is_active: Boolean,
+  iso_certifications: Array,
+  created_at: DateTime,
+  updated_at: DateTime
+}
+```
+
+#### `consultants`
+```javascript
+{
+  _id: ObjectId,
+  short_code: String,      // "TY", "PL", "PW"
+  name: String,
+  email: String,
+  created_at: DateTime
+}
+```
+
+#### `invoices`
+```javascript
+{
+  _id: ObjectId,
+  client_id: String,       // FK -> clients
+  invoice_number: String,  // "2603-001"
+  invoice_date: String,    // "YYYY-MM-DD"
+  due_date: String,
+  terms: String,
+  sub_header: String,
+  discount_type: String,   // "percentage" | "fixed"
+  discount_value: Number,
+  currency: String,        // "HKD" | "USD" | "CNY" | "MOP"
+  consultant_ids: Array,   // FK -> consultants
+  source_quotation_id: String,
+  status: String,          // "draft" | "pending_approval" | "approved" | "sent" | "revised" | "paid"
+  recurring_source_id: String,  // set when generated from a recurring schedule (optional)
+  items: [{
+    name: String,
+    details: String,
+    quantity: Number,
+    price: Number,
+    tax_rate: Number,
+    sort_order: Number,
+    is_recurring: Boolean
+  }],
+  subtotal: Number,
+  tax_amount: Number,
+  discount_amount: Number,
+  total: Number,
+  paid_amount: Number,
+  created_at: DateTime,
+  updated_at: DateTime
+}
+```
+
+#### `quotations`
+```javascript
+{
+  _id: ObjectId,
+  client_id: String,
+  quotation_number: String,  // "Q2603-001"
+  quotation_date: String,
+  valid_until: String,
+  terms: String,
+  remark: String,
+  discount_type: String,
+  discount_value: Number,
+  currency: String,
+  status: String,            // "draft" | "pending_approval" | "sent" | "approved" | "canceled" | "confirmed"
+  items: [{
+    name: String,
+    details: String,
+    quantity: Number,
+    price: Number,
+    sort_order: Number
+  }],
+  subtotal: Number,
+  discount_amount: Number,
+  total: Number,
+  converted_invoice_id: String,
+  converted_job_order_id: String,  // set by confirm-and-convert or convert-to-job-order
+  created_at: DateTime,
+  updated_at: DateTime
+}
+```
+
+#### `quotation_templates`
+```javascript
+{
+  _id: ObjectId,
+  name: String,
+  items: Array,
+  terms: String,
+  remark: String,
+  created_at: DateTime,
+  updated_at: DateTime
+}
+```
+
+#### `job_orders`
+```javascript
+{
+  _id: ObjectId,
+  source_quotation_id: String,
+  client_id: String,
+  job_order_number: String,  // "JO2603-001"
+  header: String,
+  description: String,
+  currency: String,
+  items: Array,
+  status: String,            // "active"
+  total: Number,
+  confirmed_date: String,
+  created_at: DateTime,
+  updated_at: DateTime
+}
+```
+
+#### `payments`
+```javascript
+{
+  _id: ObjectId,
+  invoice_id: String,        // FK -> invoices
+  amount: Number,
+  payment_date: String,
+  payment_method: String,    // "bank_transfer" | "cash" | "check" | "credit_card" | "other"
+  note: String,
+  document_path: String,     // uploaded receipt path
+  created_at: DateTime
+}
+```
+
+#### `recurring_invoices`
+```javascript
+{
+  _id: ObjectId,
+  invoice_id: String,       // FK -> invoices (template invoice to copy from)
+  interval: String,         // "weekly" | "monthly" | "quarterly" | "yearly"
+  next_date: String,        // "YYYY-MM-DD" — next run date
+  end_date: String,         // optional — schedule auto-disables after this date
+  is_active: Boolean,
+  created_at: DateTime,
+  updated_at: DateTime
+}
+```
+
+#### `uploaded_files`
+```javascript
+{
+  _id: ObjectId,
+  filename: String,
+  content_type: String,
+  data: String,             // base64 file bytes
+  created_at: DateTime
+}
+```
+
+#### `company_settings`
+```javascript
+{
+  _id: ObjectId,
+  company_name: String,
+  address_line1: String,
+  address_line2: String,
+  city: String,
+  country: String,
+  phone1: String,
+  phone2: String,
+  email: String,
+  website: String,
+  default_currency: String,
+  // Bank 1
+  bank1_name: String,
+  bank1_code: String,
+  bank1_branch: String,
+  bank1_address: String,
+  bank1_swift: String,
+  bank1_account_name: String,
+  bank1_account_number: String,
+  // Bank 2
+  bank2_name: String,
+  bank2_code: String,
+  bank2_branch: String,
+  bank2_address: String,
+  bank2_swift: String,
+  bank2_account_name: String,
+  bank2_account_number: String,
+  // AI Config
+  ai_model_name: String,
+  ai_api_key: String,
+  ai_base_url: String,
+  // Email accounts (array)
+  email_accounts: Array,
+  // Gmail service account
+  gmail_service_account_json: String,
+  gmail_send_as_email: String,
+  // API key
+  api_key: String,
+  api_key_created_at: DateTime,
+  // Logos & signature
+  company_logo: String,
+  header_logo: String,
+  signature_image: String,
+  company_logo_scale: Number,
+  header_logo_scale: Number,
+  created_at: DateTime,
+  updated_at: DateTime
+}
+```
+
+---
+
+## 📡 API Reference
+
+All session-based endpoints share the prefix `/api` and authenticate via httpOnly JWT cookies. The public REST API uses the prefix `/api/v1` with an `X-API-Key` header.
+
+### Base URL
+```
+https://your-domain.com/api
+```
+
+### Health
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/health` | Health check; pings MongoDB |
+
+### Setup
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/setup` | Bootstrap first admin user (only works when DB has no users) |
+
+### Authentication Endpoints
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/auth/register` | Register new user (invite code required when users exist) |
+| `POST` | `/auth/login` | Login user; sets httpOnly JWT cookies |
+| `POST` | `/auth/logout` | Logout user; clears auth cookies |
+| `GET` | `/auth/me` | Get current user from JWT |
+| `POST` | `/auth/refresh` | Refresh access token from refresh cookie |
+
+### User Management Endpoints (Admin)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/users` | List all users |
+| `POST` | `/users` | Create a user |
+| `PUT` | `/users/{user_id}` | Update a user |
+| `DELETE` | `/users/{user_id}` | Delete a user |
+
+### Client Endpoints
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/clients` | List clients (supports pagination, search, sort) |
+| `POST` | `/clients` | Create client |
+| `GET` | `/clients/{client_id}` | Get client |
+| `PUT` | `/clients/{client_id}` | Update client |
+| `DELETE` | `/clients/{client_id}` | Delete client |
+| `POST` | `/clients/bulk-delete` | Bulk delete clients |
+| `POST` | `/clients/bulk-set-inactive` | Bulk mark clients inactive |
+| `GET` | `/clients/export/csv` | Export clients to CSV |
+| `POST` | `/clients/import/csv` | Import clients from CSV |
+
+### Consultant Endpoints
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/consultants` | List consultants (auto-seeds defaults on first call) |
+| `POST` | `/consultants` | Create consultant |
+| `PUT` | `/consultants/{consultant_id}` | Update consultant |
+| `DELETE` | `/consultants/{consultant_id}` | Delete consultant |
+
+### Invoice Endpoints
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/invoices` | List invoices (supports pagination, status filter, client filter, sort) |
+| `POST` | `/invoices` | Create invoice |
+| `GET` | `/invoices/{invoice_id}` | Get invoice |
+| `PUT` | `/invoices/{invoice_id}` | Update invoice |
+| `PATCH` | `/invoices/{invoice_id}/status` | Update invoice status |
+| `DELETE` | `/invoices/{invoice_id}` | Delete invoice |
+| `POST` | `/invoices/{invoice_id}/duplicate` | Duplicate invoice as a new draft |
+| `GET` | `/invoices/{invoice_id}/pdf` | Download invoice PDF |
+| `POST` | `/invoices/{invoice_id}/send-email` | Email invoice PDF to client |
+| `POST` | `/invoices/{invoice_id}/send-reminder` | Send payment reminder email |
+| `POST` | `/invoices/bulk-delete` | Bulk delete invoices |
+| `POST` | `/invoices/bulk-status` | Bulk update invoice status |
+| `GET` | `/invoices/export/csv` | Export invoices to CSV |
+| `POST` | `/invoices/import/csv` | Import invoices from CSV |
+
+### Quotation Endpoints
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/quotations` | List quotations (supports pagination, status filter, client filter, sort) |
+| `GET` | `/quotations/lookup` | Lookup quotation by number |
+| `POST` | `/quotations` | Create quotation |
+| `GET` | `/quotations/{quotation_id}` | Get quotation |
+| `PUT` | `/quotations/{quotation_id}` | Update quotation |
+| `PATCH` | `/quotations/{quotation_id}/status` | Update quotation status |
+| `POST` | `/quotations/{quotation_id}/convert-to-invoice` | Convert quotation to invoice |
+| `POST` | `/quotations/{quotation_id}/confirm-and-convert` | Confirm quotation; create **invoice and job order** in one step |
+| `POST` | `/quotations/{quotation_id}/convert-to-job-order` | Create job order from quotation |
+| `DELETE` | `/quotations/{quotation_id}` | Delete quotation |
+| `GET` | `/quotations/{quotation_id}/pdf` | Download quotation PDF |
+| `POST` | `/quotations/{quotation_id}/send-email` | Email quotation PDF to client |
+
+### Quotation Template Endpoints
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/quotation-templates` | List quotation templates |
+| `POST` | `/quotation-templates` | Create quotation template |
+| `PUT` | `/quotation-templates/{template_id}` | Update quotation template |
+| `DELETE` | `/quotation-templates/{template_id}` | Delete quotation template |
+
+### Job Order Endpoints
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/job-orders` | List job orders (supports pagination, client filter, sort) |
+| `POST` | `/job-orders` | Create job order |
+| `GET` | `/job-orders/{job_order_id}` | Get job order |
+| `PUT` | `/job-orders/{job_order_id}` | Update job order |
+| `DELETE` | `/job-orders/{job_order_id}` | Delete job order |
+| `POST` | `/job-orders/extract-from-pdf` | AI PDF extraction (DeepSeek) |
+| `GET` | `/job-orders/{job_order_id}/pdf` | Download job order PDF |
+| `POST` | `/job-orders/{job_order_id}/send-email` | Email job order PDF to client |
+
+### Payment Endpoints
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/payments` | List payments (supports pagination, invoice filter, sort) |
+| `POST` | `/payments` | Record payment; auto-updates invoice paid amount and status |
+| `POST` | `/payments/{payment_id}/upload-receipt` | Upload receipt file for a payment |
+| `DELETE` | `/payments/{payment_id}` | Delete payment; reverses paid amount |
+
+### Recurring Invoice Endpoints
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/recurring-invoices` | List recurring invoice schedules |
+| `POST` | `/recurring-invoices` | Create recurring invoice schedule |
+| `DELETE` | `/recurring-invoices/{recurring_id}` | Delete schedule |
+| `PATCH` | `/recurring-invoices/{recurring_id}/toggle` | Enable or disable schedule |
+| `POST` | `/recurring-invoices/process` | Batch-process all due recurring invoices |
+
+### Dashboard Endpoints
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/dashboard/summary` | Get summary stats (revenue, invoices, quotations, payments) |
+| `GET` | `/dashboard/revenue` | Get revenue breakdown (monthly and by consultant) |
+
+### Settings Endpoints
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/settings/company` | Get company settings (secrets stripped for client) |
+| `PUT` | `/settings/company` | Update company settings |
+| `POST` | `/settings/company/logo` | Upload company or header logo |
+| `POST` | `/settings/company/gmail-service-account` | Upload Gmail service account JSON |
+| `DELETE` | `/settings/company/gmail-service-account` | Remove Gmail service account |
+| `POST` | `/settings/ai/test` | Test AI (DeepSeek) API connection |
+| `POST` | `/settings/gmail/test` | Test Gmail API / SMTP send-as configuration |
+| `GET` | `/settings/api-key` | Get API key metadata (admin) |
+| `POST` | `/settings/api-key` | Generate API key (admin) |
+| `DELETE` | `/settings/api-key` | Revoke API key (admin) |
+
+### File Endpoints
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/uploads/{filename}` | Serve uploaded file (logos, receipts, etc.) |
+
+### Public REST API v1 (`/api/v1`) — `X-API-Key` header
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/v1/clients` | List clients |
+| `GET` | `/api/v1/clients/{client_id}` | Get client |
+| `POST` | `/api/v1/clients` | Create client |
+| `PUT` | `/api/v1/clients/{client_id}` | Update client |
+| `DELETE` | `/api/v1/clients/{client_id}` | Delete client |
+| `GET` | `/api/v1/invoices` | List invoices |
+| `GET` | `/api/v1/invoices/{invoice_id}` | Get invoice |
+| `POST` | `/api/v1/invoices` | Create invoice |
+| `PUT` | `/api/v1/invoices/{invoice_id}` | Update invoice |
+| `PATCH` | `/api/v1/invoices/{invoice_id}/status` | Update invoice status |
+| `GET` | `/api/v1/invoices/{invoice_id}/pdf` | Download invoice PDF |
+| `GET` | `/api/v1/quotations` | List quotations |
+| `GET` | `/api/v1/quotations/{quotation_id}` | Get quotation |
+| `POST` | `/api/v1/quotations` | Create quotation |
+| `GET` | `/api/v1/job-orders` | List job orders |
+| `GET` | `/api/v1/job-orders/{job_order_id}` | Get job order |
+| `POST` | `/api/v1/job-orders` | Create job order |
+| `GET` | `/api/v1/payments` | List payments |
+| `POST` | `/api/v1/payments` | Create payment |
+
+---
+
+## ⚙️ Backend Functions
+
+### Authentication & Security (`server.py`)
+
+```python
+def hash_password(password: str) -> str
+    """Hash password using bcrypt with generated salt"""
+
+def verify_password(plain_password: str, hashed_password: str) -> bool
+    """Verify password against bcrypt hash"""
+
+def validate_new_password(password: str) -> None
+    """Enforce password strength rules (min length, complexity); raises HTTPException on failure"""
+
+def create_access_token(user_id: str, email: str) -> str
+    """Create JWT access token (expires: 60 minutes)"""
+
+def create_refresh_token(user_id: str) -> str
+    """Create JWT refresh token (expires: 7 days)"""
+
+async def get_current_user(request: Request) -> dict
+    """Extract and validate JWT from cookies or Authorization header; return user dict"""
+```
+
+### MongoDB Helpers
+
+```python
+def parse_object_id(value: str, field_name: str = "id") -> ObjectId
+    """Parse a string to ObjectId; raises 422 on invalid format"""
+
+def parse_object_ids(ids: List[str], field_name: str = "ids") -> List[ObjectId]
+    """Parse a list of strings to ObjectIds; raises 422 on any invalid entry"""
+
+def try_object_id(value: Optional[str]) -> Optional[ObjectId]
+    """Try to parse string to ObjectId; returns None on failure (no exception)"""
+
+def filter_object_ids(values: List[str]) -> List[ObjectId]
+    """Convert a list of strings to ObjectIds, silently skipping invalid entries"""
+
+def serialize_doc(doc: dict) -> dict
+    """Convert MongoDB document (_id, ObjectId fields) to JSON-serializable format"""
+
+def paginate(items: list, page: int, limit: int) -> dict
+    """Slice a list and return {data, pagination} envelope"""
+```
+
+### Company Settings Helpers
+
+```python
+def serialize_company_settings_for_client(doc: dict) -> dict
+    """Return company settings with secrets (api_key, ai_api_key, passwords) stripped for browser"""
+
+async def get_cached_settings() -> dict
+    """Return company settings from in-memory cache; hits DB only on first call or after invalidation"""
+
+def invalidate_settings_cache()
+    """Clear the in-memory settings cache; called after any settings update"""
+
+def _email_account_has_outgoing_config(acc: Any) -> bool
+    """Return True if an email account dict has a usable outgoing mail configuration"""
+
+def _legacy_company_settings_has_outgoing(doc: dict) -> bool
+    """Return True if the legacy (flat) settings document has SMTP or Gmail credentials"""
+
+async def migrate_company_settings_email_accounts() -> None
+    """One-time migration: promote legacy flat SMTP/Gmail fields to the email_accounts array"""
+
+def _gmail_service_account_info(settings: Optional[dict] = None) -> dict
+    """Parse and return Gmail service account metadata from stored settings"""
+
+def _normalize_gmail_send_as_email(raw: Optional[str]) -> str
+    """Normalize a send-as email string (strip whitespace/quotes)"""
+
+def _parse_service_account_credentials_json(raw: str) -> dict
+    """Decode and parse base64-encoded Gmail service account JSON"""
+```
+
+### Auto-Generation Functions
+
+```python
+async def generate_invoice_number() -> str
+    """Generate next sequential invoice number: YYMM-NNN (e.g., '2603-042')"""
+
+async def generate_quotation_number() -> str
+    """Generate next sequential quotation number: QYYMM-NNN (e.g., 'Q2603-015')"""
+
+def generate_job_order_number() -> str
+    """Generate next sequential job order number: JOYYMM-NNN (e.g., 'JO2603-008')"""
+
+# Client code generation (inline in create_client):
+# Format: First letters of name words + zero-padded counter (e.g., 'AC001' for 'Acme Corp')
+```
+
+### PDF generation (`backend/pdf_helpers.py`)
+
+ReportLab drawing, tables, logos, and `build_invoice_pdf` / `build_quotation_pdf` / `build_job_order_pdf` live in **`pdf_helpers.py`** (~560 lines). `server.py` loads those builders, restores binary uploads from `uploaded_files` when needed, and streams the PDF responses.
+
+```python
+def format_currency(amount: float, currency: str = "HKD") -> str
+    """Format amount with currency symbol"""
+    # Symbols: {"HKD": "HK$", "USD": "$", "CNY": "¥", "MOP": "MOP$"}
+
+def extract_text_from_pdf(file_path: Path) -> str
+    """Extract raw text from a PDF file using PyPDF2"""
+
+async def generate_invoice_pdf(invoice_id: str, request: Request)
+    """Build and stream invoice PDF using ReportLab; includes company branding and bank details"""
+
+async def generate_quotation_pdf(quotation_id: str, request: Request)
+    """Build and stream quotation PDF using ReportLab"""
+
+async def generate_job_order_pdf(job_order_id: str, request: Request)
+    """Build and stream job order PDF using ReportLab"""
+```
+
+### Document Builder Helpers
+
+```python
+def build_invoice_doc_from_quotation(quotation: dict, quotation_id: str, invoice_number: str) -> dict
+    """Build an invoice document dict by copying fields from a quotation (used during conversion)"""
+
+def build_job_order_doc_from_quotation(quotation: dict, quotation_id: str, jo_number: str) -> dict
+    """Build a job order document dict by copying fields from a quotation"""
+```
+
+### Email Functions
+
+```python
+def apply_email_template_placeholders(template: str, context: Dict[str, Any]) -> str
+    """Replace {{key}} placeholders in an email template string with context values"""
+
+def _invoice_email_context(invoice: dict, client: Optional[dict], settings: dict) -> Dict[str, str]
+    """Build the template context dict for invoice emails"""
+
+def _quotation_email_context(quotation: dict, client: Optional[dict], settings: dict) -> Dict[str, str]
+    """Build the template context dict for quotation emails"""
+
+def _job_order_email_context(job_order: dict, client: Optional[dict], settings: dict) -> Dict[str, str]
+    """Build the template context dict for job order emails"""
+
+def _resolve_email_account(settings: dict, email_account_id: Optional[str]) -> dict
+    """Select the correct email account config from settings given an optional account ID"""
+
+def _append_signature_html(body: str, signature_html: Optional[str]) -> str
+    """Append HTML email signature block to a message body"""
+
+def _send_smtp_email(smtp_host, smtp_port, smtp_email, smtp_password, smtp_use_tls, msg)
+    """Send an email message via SMTP (sync, run in threadpool)"""
+
+def _send_gmail_api_sync(service_account_info, send_as_email, msg)
+    """Send an email message via Gmail API using a service account (sync, run in threadpool)"""
+
+async def send_email_with_attachment(to_email, subject, body, pdf_bytes, pdf_filename, settings, email_account_id)
+    """Dispatch an email with a PDF attachment using either SMTP or Gmail API"""
+```
+
+### Rate Limiting
+
+```python
+def _client_ip(request: Request) -> str
+    """Extract client IP from request (respects X-Forwarded-For header)"""
+
+def _prune_rate_limit_store(window_id: int) -> None
+    """Remove stale entries from the in-memory rate limit store"""
+
+# RateLimitMiddleware class:
+# Applies configurable per-IP rate limits to specific routes (e.g., /auth/login)
+```
+
+### CRUD Endpoint Functions
+
+```python
+# Auth
+async def register(data: UserRegister, response: Response)
+async def login(data: UserLogin, response: Response)
+async def logout(response: Response)
+async def get_me(request: Request)
+async def refresh_token(request: Request, response: Response)
+
+# Users (admin)
+async def list_users(request: Request)
+async def create_user(data: UserCreate, request: Request)
+async def update_user(user_id: str, data: UserUpdate, request: Request)
+async def delete_user(user_id: str, request: Request)
+
+# Clients
+async def get_clients(request: Request, search: str, active_only: bool, page: int, limit: int, sort_by: str, sort_dir: str)
+async def create_client(data: ClientCreate, request: Request)
+async def get_client(client_id: str, request: Request)
+async def update_client(client_id: str, data: ClientCreate, request: Request)
+async def delete_client(client_id: str, request: Request)
+async def bulk_delete_clients(data: BulkActionRequest, request: Request)
+async def bulk_set_inactive_clients(data: BulkActionRequest, request: Request)
+async def export_clients_csv(request: Request)
+async def import_clients_csv(request: Request, file: UploadFile)
+
+# Consultants
+async def get_consultants(request: Request)
+async def create_consultant(data: ConsultantCreate, request: Request)
+async def update_consultant(consultant_id: str, data: ConsultantCreate, request: Request)
+async def delete_consultant(consultant_id: str, request: Request)
+
+# Invoices
+async def get_invoices(request: Request, status: str, client_id: str, page: int, limit: int, sort_by: str, sort_dir: str)
+async def create_invoice(data: InvoiceCreate, request: Request)
+async def get_invoice(invoice_id: str, request: Request)
+async def update_invoice(invoice_id: str, data: InvoiceCreate, request: Request)
+async def update_invoice_status(invoice_id: str, request: Request)
+async def delete_invoice(invoice_id: str, request: Request)
+async def send_invoice_email(invoice_id: str, data: EmailSendRequest, request: Request)
+async def send_payment_reminder(invoice_id: str, data: EmailSendRequest, request: Request)
+async def bulk_delete_invoices(data: BulkActionRequest, request: Request)
+async def bulk_update_invoice_status(data: BulkActionRequest, request: Request)
+async def export_invoices_csv(request: Request)
+async def import_invoices_csv(request: Request, file: UploadFile)
+
+# Quotations
+async def get_quotations(request: Request, status: str, client_id: str, page: int, limit: int, sort_by: str, sort_dir: str)
+async def lookup_quotation_by_number(number: str, request: Request)
+async def create_quotation(data: QuotationCreate, request: Request)
+async def get_quotation(quotation_id: str, request: Request)
+async def update_quotation(quotation_id: str, data: QuotationCreate, request: Request)
+async def update_quotation_status(quotation_id: str, request: Request)
+async def convert_quotation_to_invoice(quotation_id: str, request: Request)
+async def confirm_and_convert_quotation(quotation_id: str, request: Request)
+async def convert_quotation_to_job_order(quotation_id: str, request: Request)
+async def delete_quotation(quotation_id: str, request: Request)
+async def send_quotation_email(quotation_id: str, data: EmailSendRequest, request: Request)
+
+# Quotation Templates
+async def get_quotation_templates(request: Request)
+async def create_quotation_template(data: QuotationTemplateCreate, request: Request)
+async def update_quotation_template(template_id: str, data: QuotationTemplateCreate, request: Request)
+async def delete_quotation_template(template_id: str, request: Request)
+
+# Job Orders
+async def get_job_orders(request: Request, client_id: str, page: int, limit: int, sort_by: str, sort_dir: str)
+async def create_job_order(data: JobOrderCreate, request: Request)
+async def get_job_order(job_order_id: str, request: Request)
+async def update_job_order(job_order_id: str, data: JobOrderCreate, request: Request)
+async def delete_job_order(job_order_id: str, request: Request)
+async def extract_from_pdf(request: Request, file: UploadFile)
+async def send_job_order_email(job_order_id: str, data: JobOrderEmailSendRequest, request: Request)
+
+# Payments
+async def get_payments(request: Request, invoice_id: str, page: int, limit: int, sort_by: str, sort_dir: str)
+async def create_payment(data: PaymentCreate, request: Request)
+async def upload_payment_receipt(payment_id: str, request: Request, file: UploadFile)
+async def delete_payment(payment_id: str, request: Request)
+
+# Recurring Invoices
+async def create_recurring_invoice(data: RecurringInvoiceCreate, request: Request)
+async def get_recurring_invoices(request: Request)
+async def delete_recurring_invoice(recurring_id: str, request: Request)
+async def toggle_recurring_invoice(recurring_id: str, request: Request)
+async def process_recurring_invoices(request: Request)
+
+# Dashboard
+async def get_dashboard_summary(request: Request)
+async def get_revenue_dashboard(request: Request, period: str, year: int)
+
+# Settings
+async def get_company_settings(request: Request)
+async def update_company_settings(data: CompanySettingsUpdate, request: Request)
+async def upload_company_logo(request: Request, file: UploadFile, logo_type: str)
+async def upload_gmail_service_account_json(request: Request, file: UploadFile)
+async def delete_gmail_service_account_json(request: Request)
+async def test_ai_connection(request: Request, body: Optional[AiTestBody])
+async def test_gmail_connection(request: Request, body: Optional[GmailTestBody])
+async def serve_upload(filename: str)
+
+# API Key Management (admin)
+async def get_api_key(request: Request)
+async def generate_api_key(request: Request)
+async def revoke_api_key(request: Request)
+
+# Setup
+async def setup_admin()
+async def health_check()
+
+# Public API v1 (X-API-Key)
+async def verify_api_key(request: Request) -> dict
+async def v1_list_clients(request: Request, search: str, active_only: bool)
+async def v1_get_client(client_id: str, request: Request)
+async def v1_create_client(data: ClientCreate, request: Request)
+async def v1_update_client(client_id: str, data: ClientCreate, request: Request)
+async def v1_delete_client(client_id: str, request: Request)
+async def v1_list_invoices(request: Request, status: str, client_id: str)
+async def v1_get_invoice(invoice_id: str, request: Request)
+async def v1_create_invoice(data: InvoiceCreate, request: Request)
+async def v1_update_invoice(invoice_id: str, data: InvoiceCreate, request: Request)
+async def v1_update_invoice_status(invoice_id: str, request: Request)
+async def v1_get_invoice_pdf(invoice_id: str, request: Request)
+async def v1_list_quotations(request: Request, status: str, client_id: str)
+async def v1_get_quotation(quotation_id: str, request: Request)
+async def v1_create_quotation(data: QuotationCreate, request: Request)
+async def v1_list_job_orders(request: Request, client_id: str)
+async def v1_get_job_order(job_order_id: str, request: Request)
+async def v1_create_job_order(data: JobOrderCreate, request: Request)
+async def v1_list_payments(request: Request, invoice_id: str)
+async def v1_create_payment(data: PaymentCreate, request: Request)
+```
+
+---
+
+## 🎨 Frontend Structure
+
+### Directory Structure
+```
+frontend/src/
+├── App.js                          # Main app entry point with routes and auth wrappers
+├── App.jsx                         # Alternate app entry (adds /admin route)
+├── index.js                        # Entry point; wraps app with TanStack React Query
+├── index.css                       # Tailwind imports + CSS variables
+├── contexts/
+│   ├── AuthContext.js              # Authentication state (user, loading, login/logout)
+│   └── AuthContext.jsx             # Extended AuthContext variant
+├── lib/
+│   ├── api.js                      # Axios instance + all API function namespaces
+│   ├── authRedirect.js             # Safe next-path redirect helpers
+│   ├── backendUrl.js               # Resolve backend base URL from env
+│   ├── emailAccounts.js            # Email account selection helpers
+│   ├── emailCompose.js             # Compose email payload helpers
+│   ├── routeMeta.js                # Route metadata (titles, icons)
+│   ├── settingsDefaults.js         # Default values for company settings form
+│   └── utils.js                    # Shared utility functions (cn, etc.)
+├── pages/
+│   ├── LoginPage.jsx               # Login / Register
+│   ├── DashboardPage.jsx           # Revenue dashboard with charts
+│   ├── ClientsPage.jsx             # Client list, search, bulk actions
+│   ├── ConsultantsPage.jsx         # Consultant management
+│   ├── InvoicesPage.jsx            # Invoice list with filters and bulk actions
+│   ├── InvoiceDetailPage.jsx       # Invoice detail, line items, payments, email
+│   ├── QuotationsPage.jsx          # Quotation list with filters
+│   ├── QuotationDetailPage.jsx     # Quotation detail, convert/confirm actions
+│   ├── JobOrdersPage.jsx           # Job order list, AI PDF extraction
+│   ├── PaymentsPage.jsx            # Payment list with receipt upload
+│   ├── RecurringInvoicesPage.jsx   # Recurring invoice schedule management
+│   ├── SettingsPage.jsx            # Company settings, bank info, logos, AI, email
+│   ├── AdminPage.jsx               # Admin panel (users, API key management)
+│   └── components/                 # Page-level dialog and form components
+│       ├── ClientFormDialog.js     # Client create/edit dialog
+│       ├── CreateInvoiceDialog.js  # Invoice creation dialog
+│       ├── EmailDialog.js          # Email compose/send dialog
+│       ├── PaymentDialog.js        # Payment record dialog
+│       ├── PrintPreview.js         # PDF print preview wrapper
+│       ├── UsersManager.js         # Admin users CRUD component
+│       └── ApiKeyManager.js        # API key generate/revoke component
+├── components/
+│   ├── Layout.jsx                  # Main app shell with sidebar navigation
+│   ├── ErrorBoundary.jsx           # React error boundary
+│   ├── ClientCombobox.jsx          # Searchable client selector
+│   ├── DocumentPreviewModal.jsx    # Modal for previewing uploaded documents
+│   ├── EmailAccountSelect.jsx      # Email account picker for outgoing emails
+│   ├── admin/
+│   │   └── AdminUsersApi.jsx       # Admin users API wrappers
+│   ├── api/
+│   │   └── ApiV1Documentation.jsx  # Rendered API v1 documentation page
+│   ├── settings/
+│   │   ├── AiConfigurationCard.jsx # AI settings card component
+│   │   └── CompanyBankingForms.jsx # Bank account form components
+│   └── ui/                         # Shadcn/UI component library
+│       ├── accordion.jsx, alert.jsx, alert-dialog.jsx
+│       ├── avatar.jsx, badge.jsx, breadcrumb.jsx
+│       ├── button.jsx, calendar.jsx, card.jsx
+│       ├── carousel.jsx, checkbox.jsx, collapsible.jsx
+│       ├── command.jsx, context-menu.jsx, dialog.jsx
+│       ├── drawer.jsx, dropdown-menu.jsx, form.jsx
+│       ├── hover-card.jsx, input.jsx, input-otp.jsx
+│       ├── label.jsx, menubar.jsx, navigation-menu.jsx
+│       ├── pagination.jsx, popover.jsx, progress.jsx
+│       ├── radio-group.jsx, resizable.jsx, scroll-area.jsx
+│       ├── select.jsx, separator.jsx, sheet.jsx
+│       ├── skeleton.jsx, slider.jsx, sonner.jsx
+│       ├── switch.jsx, table.jsx, tabs.jsx
+│       ├── textarea.jsx
+│       ├── toggle.jsx, toggle-group.jsx, tooltip.jsx
+│       └── ...
+```
+
+### Routes
+```javascript
+/login              → LoginPage (public)
+/                   → DashboardPage (protected)
+/clients            → ClientsPage (protected)
+/consultants        → ConsultantsPage (protected)
+/invoices           → InvoicesPage (protected)
+/invoices/:id       → InvoiceDetailPage (protected)
+/quotations         → QuotationsPage (protected)
+/quotations/:id     → QuotationDetailPage (protected)
+/job-orders         → JobOrdersPage (protected)
+/payments           → PaymentsPage (protected)
+/recurring-invoices → RecurringInvoicesPage (protected)
+/settings           → SettingsPage (protected)
+/admin              → AdminPage (protected, App.jsx only)
+```
+
+### API Functions (`lib/api.js`)
+```javascript
+// Auth
+authAPI.login(email, password)
+authAPI.register(email, password, name, inviteCode)
+authAPI.logout()
+authAPI.me()
+
+// Clients
+clientsAPI.list(search, activeOnly, page, limit, sortBy, sortDir)
+clientsAPI.get(id)
+clientsAPI.create(data)
+clientsAPI.update(id, data)
+clientsAPI.delete(id)
+clientsAPI.bulkDelete(ids)
+clientsAPI.bulkSetInactive(ids)
+clientsAPI.exportCSV()
+clientsAPI.importCSV(file)
+
+// Consultants
+consultantsAPI.list()
+consultantsAPI.create(data)
+consultantsAPI.update(id, data)
+consultantsAPI.delete(id)
+
+// Invoices
+invoicesAPI.list(status, clientId, page, limit, sortBy, sortDir)
+invoicesAPI.get(id)
+invoicesAPI.create(data)
+invoicesAPI.update(id, data)
+invoicesAPI.updateStatus(id, status)
+invoicesAPI.delete(id)
+invoicesAPI.duplicate(id)
+invoicesAPI.getPDF(id)
+invoicesAPI.sendEmail(id, data)
+invoicesAPI.sendReminder(id, data)
+invoicesAPI.bulkDelete(ids)
+invoicesAPI.bulkStatus(ids, action)
+invoicesAPI.exportCSV()
+invoicesAPI.importCSV(file)
+
+// Quotations
+quotationsAPI.list(status, clientId, page, limit, sortBy, sortDir)
+quotationsAPI.get(id)
+quotationsAPI.lookup(number)
+quotationsAPI.create(data)
+quotationsAPI.update(id, data)
+quotationsAPI.updateStatus(id, status)
+quotationsAPI.delete(id)
+quotationsAPI.convertToInvoice(id)
+quotationsAPI.confirmAndConvert(id)
+quotationsAPI.convertToJobOrder(id)
+quotationsAPI.getPDF(id)
+quotationsAPI.sendEmail(id, data)
+
+// Quotation Templates
+quotationTemplatesAPI.list()
+quotationTemplatesAPI.create(data)
+quotationTemplatesAPI.update(id, data)
+quotationTemplatesAPI.delete(id)
+
+// Recurring Invoices
+recurringInvoicesAPI.list()
+recurringInvoicesAPI.create(data)
+recurringInvoicesAPI.delete(id)
+recurringInvoicesAPI.toggle(id)
+recurringInvoicesAPI.process()
+
+// Job Orders
+jobOrdersAPI.list(clientId, page, limit, sortBy, sortDir)
+jobOrdersAPI.get(id)
+jobOrdersAPI.create(data)
+jobOrdersAPI.update(id, data)
+jobOrdersAPI.delete(id)
+jobOrdersAPI.extractFromPDF(file)
+jobOrdersAPI.getPDF(id)
+jobOrdersAPI.sendEmail(id, data)
+
+// Payments
+paymentsAPI.list(invoiceId, page, limit, sortBy, sortDir)
+paymentsAPI.create(data)
+paymentsAPI.delete(id)
+paymentsAPI.uploadReceipt(id, file)
+
+// Dashboard
+dashboardAPI.getRevenue(period, year)
+dashboardAPI.getSummary()
+
+// Users (admin)
+usersAPI.list()
+usersAPI.create(data)
+usersAPI.update(id, data)
+usersAPI.delete(id)
+
+// API Key (admin)
+apiKeyAPI.get()
+apiKeyAPI.generate()
+apiKeyAPI.revoke()
+
+// Settings
+settingsAPI.getCompany()
+settingsAPI.updateCompany(data)
+settingsAPI.uploadLogo(file, logoType)
+settingsAPI.uploadGmailServiceAccount(file)
+settingsAPI.deleteGmailServiceAccount()
+settingsAPI.testAI(overrides)
+settingsAPI.testGmail(payload)
+
+// Utility helpers (named exports from api.js)
+formatApiError(error)              // Extract human-readable error string from Axios error
+unwrapListResponse(responseData)   // Unwrap plain array or paginated {data, pagination} envelope
+unwrapPaginatedListResponse(responseData) // Same but preserves pagination metadata
+downloadPdfBlob(response, filename) // Trigger browser download from an Axios blob response
+```
+
+---
+
+## 🔄 Business Logic & Workflows
+
+### Invoice status workflow (session API)
+
+Typical progression enforced by `PATCH /invoices/{id}/status`:
+
+```
+DRAFT → PENDING_APPROVAL → APPROVED → SENT → REVISED → PAID
+```
+
+There is no `viewed` status in this pipeline. Some older UI or data may still show legacy values such as `viewed` or `email_sent`; treat those as historical only when aligning new code with the API.
+
+### Quotation status workflow (session API)
+
+Typical progression enforced by `PATCH /quotations/{id}/status`:
+
+```
+DRAFT → PENDING_APPROVAL → SENT → APPROVED → CONFIRMED or CANCELED
+```
+
+There is no `viewed` step. **Confirmed** is also set automatically when converting to an invoice, creating a job order only, or using confirm-and-convert (see quotation endpoints above).
+
+### Invoice Total Calculation
+```python
+subtotal = Σ(item.quantity × item.price)
+tax_amount = Σ(item.quantity × item.price × item.tax_rate / 100)
+
+if discount_type == "percentage":
+    discount_amount = subtotal × (discount_value / 100)
+else:  # fixed
+    discount_amount = discount_value
+
+total = subtotal + tax_amount - discount_amount
+balance = total - paid_amount
+```
+
+### Payment Recording Flow
+```
+1. User records payment for invoice
+2. Validate: payment_amount ≤ (invoice.total - invoice.paid_amount)
+3. Create payment record
+4. Update invoice.paid_amount += payment_amount
+5. If invoice.paid_amount ≥ invoice.total:
+   → invoice.status = "paid"
+```
+
+### Payment Reversal Flow
+```
+1. User deletes payment
+2. Get payment amount
+3. Update invoice.paid_amount -= payment_amount
+4. If invoice.status was "paid":
+   → invoice.status = "approved"
+5. Delete payment record
+```
+
+### Quotation to Invoice Conversion
+```
+1. Get quotation
+2. Generate new invoice number
+3. Create new invoice via build_invoice_doc_from_quotation():
+   - Copy client_id, terms, discount, currency
+   - Copy all line items (set tax_rate = 0)
+   - Set source_quotation_id
+   - Set status = "draft"
+4. Update quotation:
+   - Set converted_invoice_id
+   - Set status = "confirmed"
+5. Return new invoice
+```
+
+### Confirm-and-Convert Flow
+```
+1. Load quotation by ID
+2. In one request:
+   - Generate invoice number and insert invoice (same field mapping as convert-to-invoice)
+   - Generate job order number and insert job order from quotation line items
+   - Set quotation status = "confirmed", converted_invoice_id, and converted_job_order_id
+3. Return { invoice, job_order }
+```
+
+### Quotation to Job Order Conversion
+```
+1. Get quotation
+2. Generate new job order number
+3. Create job order via build_job_order_doc_from_quotation():
+   - Copy client_id, currency, items
+   - Set source_quotation_id
+   - Set status = "active"
+4. Return new job order
+```
+
+### AI PDF Extraction Flow
+```
+1. User uploads PDF
+2. Get DeepSeek API key from company_settings
+3. Extract text from PDF using extract_text_from_pdf() (PyPDF2)
+4. Call DeepSeek API (OpenAI-compatible) with structured extraction prompt
+5. Parse JSON response:
+   {
+     company_name,
+     company_address,
+     proposal_number,
+     phases: [],
+     items: [{name, description, quantity, price}]
+   }
+6. Return extracted data to frontend
+7. Frontend pre-fills job order form
+8. User reviews and saves
+```
+
+### Recurring Invoice Processing Flow
+```
+1. POST /recurring-invoices/process is called (manual trigger or scheduler)
+2. Query all active recurring schedules where next_date ≤ today (and end_date not passed)
+3. For each due schedule:
+   a. Load source invoice by invoice_id
+   b. Generate a new invoice number
+   c. Insert new invoice (draft) with recurring_source_id pointing at the schedule
+   d. Advance next_date by interval (weekly/monthly/quarterly/yearly)
+4. Return { generated: count }
+```
+
+### Revenue Dashboard Calculation
+```
+1. Get all invoices with status="paid" for selected year
+2. Group by month → monthly_revenue
+3. For each paid invoice:
+   - Split total equally among consultant_ids
+   - Aggregate per consultant → consultant_revenue
+4. Return {year, total_revenue, monthly_breakdown, consultant_breakdown}
+```
+
+### Email Sending Flow
+```
+1. Caller provides document ID, recipient email, subject, body, email_account_id
+2. _resolve_email_account() selects the configured SMTP or Gmail account
+3. Apply template placeholders (apply_email_template_placeholders)
+4. Append HTML signature (_append_signature_html)
+5. Generate PDF for the document (invoice/quotation/job order)
+6. send_email_with_attachment() dispatches via:
+   - SMTP: _send_smtp_email() in threadpool executor
+   - Gmail API: _send_gmail_api_sync() using service account in threadpool executor
+```
+
+---
+
+## 🔑 Key Variables
+
+### Environment Variables
+```bash
+# Backend (.env)
+MONGO_URL="mongodb://localhost:27017"
+DB_NAME="invoiceplane"
+JWT_SECRET="your-secret-key"
+FRONTEND_URL="https://your-domain.com"
+REGISTRATION_INVITE_CODE="optional-invite-code"  # When set, required for new user registration
+COOKIE_SECURE="false"                             # Set to "true" in production (HTTPS)
+COOKIE_SAMESITE="lax"                             # Cookie SameSite policy (e.g. lax, strict, none)
+
+# Optional: seed the first admin when calling GET /api/setup on an empty database
+ADMIN_EMAIL="admin@example.com"
+ADMIN_PASSWORD="your-strong-password"           # When set, must pass validate_new_password rules
+ADMIN_NAME="Admin"
+
+# Frontend (.env)
+REACT_APP_BACKEND_URL="https://your-domain.com"
+```
+
+### Backend Constants
+```python
+# server.py
+JWT_ALGORITHM = "HS256"
+UPLOAD_DIR = Path("./uploads")
+
+# Token expiration
+ACCESS_TOKEN_EXPIRY = 60  # minutes
+REFRESH_TOKEN_EXPIRY = 7  # days
+
+# Currency symbols
+CURRENCY_SYMBOLS = {
+    "HKD": "HK$",
+    "USD": "$",
+    "CNY": "¥",
+    "MOP": "MOP$"
+}
+
+# Invoice statuses (PATCH /invoices/{id}/status)
+# ["draft", "pending_approval", "approved", "sent", "revised", "paid"]
+
+# Quotation statuses (PATCH /quotations/{id}/status)
+# ["draft", "pending_approval", "sent", "approved", "canceled", "confirmed"]
+
+# Payment methods
+PAYMENT_METHODS = ["bank_transfer", "cash", "check", "credit_card", "other"]
+
+# Default consultants (auto-seeded on first GET /consultants)
+DEFAULT_CONSULTANTS = [
+    {"short_code": "TY", "name": "Consultant TY"},
+    {"short_code": "PL", "name": "Consultant PL"},
+    {"short_code": "PW", "name": "Consultant PW"}
+]
+```
+
+### Frontend Constants
+```javascript
+// Currency options
+const currencyOptions = ["HKD", "USD", "CNY", "MOP"];
+
+// Invoice status options (align filters with PATCH /invoices/{id}/status)
+const invoiceStatusOptions = [
+  { value: "all", label: "All Statuses" },
+  { value: "draft", label: "Draft" },
+  { value: "pending_approval", label: "Pending approval" },
+  { value: "approved", label: "Approved" },
+  { value: "sent", label: "Sent" },
+  { value: "revised", label: "Revised" },
+  { value: "paid", label: "Paid" }
+];
+
+// Quotation status options (align with PATCH /quotations/{id}/status)
+const quotationStatusOptions = [
+  { value: "all", label: "All Statuses" },
+  { value: "draft", label: "Draft" },
+  { value: "pending_approval", label: "Pending approval" },
+  { value: "sent", label: "Sent" },
+  { value: "approved", label: "Approved" },
+  { value: "canceled", label: "Canceled" },
+  { value: "confirmed", label: "Confirmed" }
+];
+
+// Payment method options
+const paymentMethodOptions = [
+  { value: "bank_transfer", label: "Bank Transfer" },
+  { value: "cash", label: "Cash" },
+  { value: "check", label: "Check" },
+  { value: "credit_card", label: "Credit Card" },
+  { value: "other", label: "Other" }
+];
+```
+
+### CSS Variables (Design System)
+```css
+:root {
+  --primary: 223 100% 33%;        /* International Klein Blue */
+  --primary-foreground: 0 0% 100%;
+  --background: 0 0% 100%;
+  --foreground: 0 0% 4%;
+  --muted: 0 0% 98%;
+  --muted-foreground: 0 0% 45%;
+  --border: 0 0% 90%;
+  --destructive: 0 72% 51%;
+  --success: 160 84% 39%;
+  --warning: 38 92% 50%;
+  --radius: 0rem;                  /* Sharp corners */
+}
+```
+
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+- Node.js 18+
+- Python 3.11+
+- MongoDB 7.0
+
+### Backend Setup
+```bash
+cd backend
+pip install -r requirements.txt
+# Alternative from the repository root: pip install -r requirements.txt
+# Copy and configure .env file
+cp .env.example .env
+# Create uploads directory
+sudo mkdir -p /app/uploads && sudo chmod 777 /app/uploads
+uvicorn server:app --host 0.0.0.0 --port 8001 --reload
+```
+
+### Frontend Setup
+```bash
+cd frontend
+yarn install
+# Copy and configure .env file
+cp .env.example .env
+yarn start
+```
+
+Use **yarn** only for the frontend (`package-lock.json` is not used). The dev server proxies `/api` to `REACT_APP_BACKEND_URL` (default `http://127.0.0.1:8001`).
+
+**Docker:** The image runs **one** process (`uvicorn` on **port 3000**) serving the API and the built SPA. Local development uses **two** processes (API **8001**, CRA **3000**).
+
+**Automated tests:** With MongoDB and the API running, from the repo root run `python3 -m pytest backend/tests -q`. Frontend: `cd frontend && yarn test --passWithNoTests`. Optional manual checks: `backend_test.py`.
+
+### Using Supervisor
+```bash
+sudo supervisorctl start all
+sudo supervisorctl status
+sudo supervisorctl restart backend
+sudo supervisorctl restart frontend
+```
+
+---
+
+## 🔐 Test Credentials
+
+Primary account used in automated tests and typical local logins:
+
+```
+Email: thomas@gabriel.hk
+Password: 12345678
+```
+
+When the database has **no users**, `GET /api/setup` creates the first admin from `ADMIN_EMAIL`, `ADMIN_PASSWORD`, and `ADMIN_NAME`. If those are unset, the server defaults to `thomas@gabriel.hk` / `Testpass12` / `Thomas` (see `setup_admin` in `server.py`).
+
+Optional demo user (if present in your database):
+
+```
+Email: testuser@example.com
+Password: Test123!
+```
+
+---
+
+## 📄 License
+
+This project is proprietary software.
+
+---
+
+## 📞 Support
+
+For support, please contact the development team.

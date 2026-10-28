@@ -1,0 +1,4043 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: API specification
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: dashboard
+    description: Dashboard operations
+  - name: clients
+    description: Client operations
+  - name: invoices
+    description: Invoice operations
+  - name: quotations
+    description: Quotation operations
+  - name: proposals
+    description: ISO consulting proposal operations
+  - name: payments
+    description: Payment operations
+  - name: payment-receipts
+    description: Payment receipt and attachment operations
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+  /dashboard:
+    get:
+      operationId: getDashboard
+      tags: [dashboard]
+      summary: Dashboard summary
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+  /activity:
+    get:
+      operationId: listActivity
+      tags: [dashboard]
+      summary: Recent business activity
+      responses:
+        "200":
+          description: Recent activity
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ActivityItem"
+  /clients:
+    get:
+      operationId: listClients
+      tags: [clients]
+      summary: List clients
+      parameters:
+        - in: query
+          name: q
+          schema:
+            type: string
+        - in: query
+          name: active
+          schema:
+            type: boolean
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+        - in: query
+          name: pageSize
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+        - in: query
+          name: sortBy
+          description: When set, results are ordered by this column.
+          schema:
+            $ref: "#/components/schemas/ClientListSortBy"
+        - in: query
+          name: sortDir
+          schema:
+            $ref: "#/components/schemas/SortDirection"
+      responses:
+        "200":
+          description: Client list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedClients"
+    post:
+      operationId: createClient
+      tags: [clients]
+      summary: Create client
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClientInput"
+      responses:
+        "201":
+          description: Created client
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Client"
+  /clients/export:
+    get:
+      operationId: exportClients
+      tags: [clients]
+      summary: Export clients as CSV
+      responses:
+        "200":
+          description: CSV file
+          content:
+            text/csv:
+              schema:
+                type: string
+  /clients/import:
+    post:
+      operationId: importClients
+      tags: [clients]
+      summary: Validate and preview a clients CSV upload
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: Import preview result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CsvImportResult"
+  /clients/{id}:
+    get:
+      operationId: getClient
+      tags: [clients]
+      summary: Get client
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: Client
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Client"
+    patch:
+      operationId: updateClient
+      tags: [clients]
+      summary: Update client
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClientPatch"
+      responses:
+        "200":
+          description: Updated client
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Client"
+    delete:
+      operationId: deleteClient
+      tags: [clients]
+      summary: Delete client
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "204":
+          description: Deleted
+  /clients/{id}/proposal:
+    get:
+      operationId: getClientProposal
+      tags: [clients]
+      summary: Get a client's proposal view (confirmed quotation + manual proposal)
+      description: >-
+        Returns the client's most recent confirmed (system-generated) quotation,
+        if any, plus any manually-entered proposal details for clients without a
+        system-generated proposal.
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: Client proposal view
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClientProposalView"
+    put:
+      operationId: upsertClientProposal
+      tags: [clients]
+      summary: Create or update a client's manual proposal details
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClientProposalInput"
+      responses:
+        "200":
+          description: Saved client proposal view
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClientProposalView"
+  /clients/{id}/proposal/migrate:
+    post:
+      operationId: migrateClientProposal
+      tags: [clients]
+      summary: Migrate legacy client proposal tracker into a draft proposal document
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "201":
+          description: Migrated proposal document
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClientProposalMigrateResult"
+        "200":
+          description: Proposal document already exists for this legacy record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClientProposalMigrateResult"
+  /clients/{id}/certifications:
+    get:
+      operationId: getClientCertifications
+      tags: [clients]
+      summary: List a client's certifications and audit history
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: Client certifications with audit rows
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClientCertificationsView"
+    post:
+      operationId: createClientCertification
+      tags: [clients]
+      summary: Add a certification (CB + standard) for a client
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClientCertificationInput"
+      responses:
+        "201":
+          description: Created certification
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClientCertificationWithAudits"
+    put:
+      operationId: replaceClientCertifications
+      tags: [clients]
+      summary: Replace all certifications and audits for a client
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReplaceClientCertificationsBody"
+      responses:
+        "200":
+          description: Saved certifications
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClientCertificationsView"
+  /clients/{id}/certifications/{certId}:
+    patch:
+      operationId: updateClientCertification
+      tags: [clients]
+      summary: Update certification body or standard
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+        - $ref: "#/components/parameters/CertIdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClientCertificationPatch"
+      responses:
+        "200":
+          description: Updated certification
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClientCertificationWithAudits"
+    delete:
+      operationId: deleteClientCertification
+      tags: [clients]
+      summary: Delete a certification and its audit history
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+        - $ref: "#/components/parameters/CertIdParam"
+      responses:
+        "204":
+          description: Deleted
+  /clients/{id}/certifications/{certId}/audits:
+    post:
+      operationId: createClientCertificationAudit
+      tags: [clients]
+      summary: Add an audit date to a certification
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+        - $ref: "#/components/parameters/CertIdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClientCertificationAuditInput"
+      responses:
+        "201":
+          description: Created audit record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClientCertificationAudit"
+  /clients/{id}/certifications/{certId}/audits/{auditId}:
+    patch:
+      operationId: updateClientCertificationAudit
+      tags: [clients]
+      summary: Update an audit record
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+        - $ref: "#/components/parameters/CertIdParam"
+        - $ref: "#/components/parameters/AuditIdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClientCertificationAuditPatch"
+      responses:
+        "200":
+          description: Updated audit record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClientCertificationAudit"
+    delete:
+      operationId: deleteClientCertificationAudit
+      tags: [clients]
+      summary: Delete an audit record
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+        - $ref: "#/components/parameters/CertIdParam"
+        - $ref: "#/components/parameters/AuditIdParam"
+      responses:
+        "204":
+          description: Deleted
+  /invoices:
+    get:
+      operationId: listInvoices
+      tags: [invoices]
+      summary: List invoices
+      parameters:
+        - in: query
+          name: status
+          schema:
+            $ref: "#/components/schemas/InvoiceStatus"
+        - in: query
+          name: clientId
+          schema:
+            type: string
+        - in: query
+          name: q
+          description: Search by invoice number, client name, client code, or amount (partial match).
+          schema:
+            type: string
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+        - in: query
+          name: pageSize
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+      responses:
+        "200":
+          description: Invoice list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedInvoices"
+    post:
+      operationId: createInvoice
+      tags: [invoices]
+      summary: Create invoice
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InvoiceInput"
+      responses:
+        "201":
+          description: Created invoice
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Invoice"
+  /invoices/export:
+    get:
+      operationId: exportInvoices
+      tags: [invoices]
+      summary: Export invoices as CSV
+      responses:
+        "200":
+          description: CSV file
+          content:
+            text/csv:
+              schema:
+                type: string
+  /invoices/continuity:
+    get:
+      operationId: getInvoiceContinuity
+      tags: [invoices]
+      summary: Verify invoice number continuity
+      description: >
+        Returns the last invoice number for each month, missing global sequence slots,
+        voided (soft-deleted) invoices, reissued numbers, and duplicate collisions.
+        Permanently purged invoices are not included and may appear as sequence gaps.
+        Custom imported numbers are listed as unparsed and excluded from gap detection.
+      responses:
+        "200":
+          description: Invoice continuity report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvoiceContinuityReport"
+  /invoices/import:
+    post:
+      operationId: importInvoices
+      tags: [invoices]
+      summary: Validate and preview an invoices CSV upload
+      description: >
+        Columns: Invoice Number, Client name, Invoice Amount, Invoice Date, item1, item2. Currency always defaults to HKD.
+        Match client by clientId (UUID), clientCode, email (column clientEmail), or client name (Client name / clientName / name).
+        Invalid rows are skipped on commit; preview lists errors per row.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: Import preview result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CsvImportResult"
+  /invoices/{id}:
+    get:
+      operationId: getInvoice
+      tags: [invoices]
+      summary: Get invoice
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: Invoice
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Invoice"
+    patch:
+      operationId: updateInvoice
+      tags: [invoices]
+      summary: Update invoice
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InvoicePatch"
+      responses:
+        "200":
+          description: Updated invoice
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Invoice"
+    delete:
+      operationId: deleteInvoice
+      tags: [invoices]
+      summary: Delete invoice
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "204":
+          description: Deleted
+  /invoices/{id}/share-token:
+    post:
+      operationId: generateInvoiceShareToken
+      tags: [invoices]
+      summary: Generate or renew a share token for an invoice
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: Generated share token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShareTokenResponse"
+    delete:
+      operationId: revokeInvoiceShareToken
+      tags: [invoices]
+      summary: Revoke the share token for an invoice
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "204":
+          description: Revoked
+  /quotations:
+    get:
+      operationId: listQuotations
+      tags: [quotations]
+      summary: List quotations
+      parameters:
+        - in: query
+          name: status
+          schema:
+            $ref: "#/components/schemas/QuotationStatus"
+        - in: query
+          name: clientId
+          schema:
+            type: string
+        - in: query
+          name: validityStatus
+          description: Filter by whether the quotation's valid-until date is before (expired) or on/after (active) today.
+          schema:
+            $ref: "#/components/schemas/QuotationValidityFilter"
+        - in: query
+          name: sortBy
+          description: When set, results are ordered by this column; expired actionable rows are still listed before others as a secondary sort.
+          schema:
+            $ref: "#/components/schemas/QuotationListSortBy"
+        - in: query
+          name: sortDir
+          schema:
+            $ref: "#/components/schemas/SortDirection"
+        - in: query
+          name: q
+          description: "Prefix-based search: Q + digits for quotation number (partial match), $… total amount (commas/decimals normalized), or plain text for client name/code."
+          schema:
+            type: string
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+        - in: query
+          name: pageSize
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+      responses:
+        "200":
+          description: Quotation list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedQuotations"
+    post:
+      operationId: createQuotation
+      tags: [quotations]
+      summary: Create quotation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QuotationInput"
+      responses:
+        "201":
+          description: Created quotation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Quotation"
+  /quotations/export:
+    get:
+      operationId: exportQuotations
+      tags: [quotations]
+      summary: Export quotations as CSV
+      responses:
+        "200":
+          description: CSV file
+          content:
+            text/csv:
+              schema:
+                type: string
+  /quotations/import:
+    post:
+      operationId: importQuotations
+      tags: [quotations]
+      summary: Validate and preview a quotations CSV upload
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: Import preview result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CsvImportResult"
+  /quotations/{id}:
+    get:
+      operationId: getQuotation
+      tags: [quotations]
+      summary: Get quotation
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: Quotation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Quotation"
+    patch:
+      operationId: updateQuotation
+      tags: [quotations]
+      summary: Update quotation
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QuotationPatch"
+      responses:
+        "200":
+          description: Updated quotation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Quotation"
+    delete:
+      operationId: deleteQuotation
+      tags: [quotations]
+      summary: Delete quotation
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "204":
+          description: Deleted
+  /quotations/{id}/convert:
+    post:
+      operationId: convertQuotation
+      tags: [quotations]
+      summary: Convert a confirmed quotation to an invoice
+      description: >
+        Only confirmed quotations can be converted. The request body is optional;
+        omitted fields are copied from the quotation (invoice starts as draft).
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConvertQuotationInput"
+      responses:
+        "201":
+          description: Created invoice from quotation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Invoice"
+        "422":
+          description: Quotation is not confirmed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /quotations/{id}/share-token:
+    post:
+      operationId: generateShareToken
+      tags: [quotations]
+      summary: Generate or renew a share token for a quotation
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: Generated share token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShareTokenResponse"
+    delete:
+      operationId: revokeShareToken
+      tags: [quotations]
+      summary: Revoke the share token for a quotation
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "204":
+          description: Revoked
+  /payments:
+    get:
+      operationId: listPayments
+      tags: [payments]
+      summary: List payments
+      parameters:
+        - in: query
+          name: invoiceId
+          schema:
+            type: string
+          description: Filter by invoice ID
+        - in: query
+          name: clientId
+          schema:
+            type: string
+          description: Filter by client ID
+        - in: query
+          name: invoiceNumber
+          schema:
+            type: string
+          description: Search by invoice number (partial match)
+        - in: query
+          name: q
+          schema:
+            type: string
+          description: Search by cheque number, reference number, or transaction ID
+        - in: query
+          name: paymentMethod
+          schema:
+            type: string
+          description: Filter by payment method
+        - in: query
+          name: dateFrom
+          schema:
+            type: string
+          description: Filter by payment date from (YYYY-MM-DD)
+        - in: query
+          name: dateTo
+          schema:
+            type: string
+          description: Filter by payment date to (YYYY-MM-DD)
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+        - in: query
+          name: pageSize
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+      responses:
+        "200":
+          description: Payment list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedPayments"
+    post:
+      operationId: createPayment
+      tags: [payments]
+      summary: Record payment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PaymentInput"
+      responses:
+        "201":
+          description: Created payment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Payment"
+  /payments/export:
+    get:
+      operationId: exportPayments
+      tags: [payments]
+      summary: Export payments as CSV
+      responses:
+        "200":
+          description: CSV file
+          content:
+            text/csv:
+              schema:
+                type: string
+  /payments/import:
+    post:
+      operationId: importPayments
+      tags: [payments]
+      summary: Validate and preview a payments CSV upload
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: Import preview result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CsvImportResult"
+  /payments/{id}:
+    delete:
+      operationId: deletePayment
+      tags: [payments]
+      summary: Delete payment
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "204":
+          description: Deleted
+  /payments/{id}/receipt:
+    post:
+      operationId: generateReceiptFromPayment
+      tags: [payments]
+      summary: Generate a formal receipt pre-filled from this payment (amount, currency, date, invoice, client)
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "201":
+          description: Created receipt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Receipt"
+        "409":
+          description: This payment already has a linked receipt
+  /payments/{id}/receipts:
+    get:
+      operationId: listPaymentReceipts
+      tags: [payments]
+      summary: List payment receipts and attachments
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: List of payment receipts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PaymentReceipt"
+    post:
+      operationId: uploadPaymentReceipt
+      tags: [payments]
+      summary: Upload a payment receipt, screenshot, or cheque deposit record
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: The receipt file to upload (image or PDF)
+                receiptType:
+                  type: string
+                  enum: [receipt, screenshot, cheque_deposit, other]
+                  description: Type of receipt being uploaded
+                description:
+                  type: string
+                  description: Optional description of the receipt
+              required: [file, receiptType]
+      responses:
+        "201":
+          description: Uploaded receipt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentReceipt"
+  /payments/{paymentId}/receipts/{receiptId}:
+    get:
+      operationId: getPaymentReceipt
+      tags: [payments]
+      summary: Get payment receipt details
+      parameters:
+        - name: paymentId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: receiptId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Receipt details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentReceipt"
+    delete:
+      operationId: deletePaymentReceipt
+      tags: [payments]
+      summary: Delete a payment receipt
+      parameters:
+        - name: paymentId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: receiptId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+  /payments/{paymentId}/receipts/{receiptId}/download:
+    get:
+      operationId: downloadPaymentReceipt
+      tags: [payments]
+      summary: Download a payment receipt file
+      parameters:
+        - name: paymentId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: receiptId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Receipt file
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+  /quotation-templates:
+    get:
+      operationId: listQuotationTemplates
+      tags: [quotations]
+      summary: List quotation templates
+      parameters:
+        - in: query
+          name: q
+          schema:
+            type: string
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+        - in: query
+          name: pageSize
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+      responses:
+        "200":
+          description: Template list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedQuotationTemplates"
+    post:
+      operationId: createQuotationTemplate
+      tags: [quotations]
+      summary: Create quotation template
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QuotationTemplateInput"
+      responses:
+        "201":
+          description: Created template
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QuotationTemplate"
+  /quotation-templates/{id}:
+    get:
+      operationId: getQuotationTemplate
+      tags: [quotations]
+      summary: Get quotation template
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: Template
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QuotationTemplate"
+    patch:
+      operationId: updateQuotationTemplate
+      tags: [quotations]
+      summary: Update quotation template
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QuotationTemplatePatch"
+      responses:
+        "200":
+          description: Updated template
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QuotationTemplate"
+    delete:
+      operationId: deleteQuotationTemplate
+      tags: [quotations]
+      summary: Delete quotation template
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "204":
+          description: Deleted
+  /receipts/stats:
+    get:
+      operationId: getReceiptsStats
+      tags: [receipts]
+      summary: Aggregate receipt totals across all matching receipts (not just the current page)
+      parameters:
+        - in: query
+          name: q
+          schema:
+            type: string
+        - in: query
+          name: clientId
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Receipt totals
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReceiptsStats"
+  /receipts:
+    get:
+      operationId: listReceipts
+      tags: [receipts]
+      summary: List receipts
+      parameters:
+        - in: query
+          name: q
+          schema:
+            type: string
+        - in: query
+          name: clientId
+          schema:
+            type: string
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+        - in: query
+          name: pageSize
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+      responses:
+        "200":
+          description: Receipt list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedReceipts"
+    post:
+      operationId: createReceipt
+      tags: [receipts]
+      summary: Create receipt
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReceiptInput"
+      responses:
+        "201":
+          description: Created receipt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Receipt"
+  /receipts/{id}:
+    get:
+      operationId: getReceipt
+      tags: [receipts]
+      summary: Get receipt
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: Receipt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Receipt"
+    patch:
+      operationId: updateReceipt
+      tags: [receipts]
+      summary: Update receipt
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReceiptPatch"
+      responses:
+        "200":
+          description: Updated receipt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Receipt"
+    delete:
+      operationId: deleteReceipt
+      tags: [receipts]
+      summary: Delete receipt
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "204":
+          description: Deleted
+  /invoices/{id}/email:
+    post:
+      operationId: emailInvoice
+      tags: [invoices]
+      summary: Send invoice via email
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmailSendBody"
+      responses:
+        "200":
+          description: Email sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmailSendResult"
+  /invoices/{id}/email/reminder:
+    post:
+      operationId: emailInvoiceReminder
+      tags: [invoices]
+      summary: Send payment reminder via email
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmailSendBody"
+      responses:
+        "200":
+          description: Reminder sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmailSendResult"
+  /quotations/{id}/email:
+    post:
+      operationId: emailQuotation
+      tags: [quotations]
+      summary: Send quotation via email
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmailSendBody"
+      responses:
+        "200":
+          description: Email sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmailSendResult"
+  /proposals/dashboard:
+    get:
+      operationId: getProposalsDashboard
+      tags: [proposals]
+      summary: Pipeline dashboard summary
+      responses:
+        "200":
+          description: Dashboard metrics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProposalsDashboard"
+  /proposals/setup-templates:
+    get:
+      operationId: getProposalSetupTemplates
+      tags: [proposals]
+      summary: Get ISO proposal setup templates
+      responses:
+        "200":
+          description: Setup templates
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProposalSetupTemplates"
+    patch:
+      operationId: updateProposalSetupTemplates
+      tags: [proposals]
+      summary: Update ISO proposal setup templates (admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProposalSetupTemplatesPatch"
+      responses:
+        "200":
+          description: Updated setup templates
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProposalSetupTemplates"
+  /proposals:
+    get:
+      operationId: listProposals
+      tags: [proposals]
+      summary: List proposals
+      parameters:
+        - in: query
+          name: q
+          schema:
+            type: string
+        - in: query
+          name: status
+          schema:
+            $ref: "#/components/schemas/ProposalStatus"
+        - in: query
+          name: clientId
+          schema:
+            type: string
+            format: uuid
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+        - in: query
+          name: pageSize
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+      responses:
+        "200":
+          description: Proposal list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedProposals"
+    post:
+      operationId: createProposal
+      tags: [proposals]
+      summary: Create proposal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProposalInput"
+      responses:
+        "201":
+          description: Created proposal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProposalDocument"
+  /proposals/{id}:
+    get:
+      operationId: getProposal
+      tags: [proposals]
+      summary: Get proposal
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: Proposal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProposalDocument"
+    patch:
+      operationId: updateProposal
+      tags: [proposals]
+      summary: Update proposal
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProposalPatch"
+      responses:
+        "200":
+          description: Updated proposal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProposalDocument"
+    delete:
+      operationId: deleteProposal
+      tags: [proposals]
+      summary: Delete proposal
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "204":
+          description: Deleted
+  /proposals/{id}/submit:
+    post:
+      operationId: submitProposal
+      tags: [proposals]
+      summary: Submit proposal for approval
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: Submitted proposal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProposalDocument"
+  /proposals/{id}/approve:
+    post:
+      operationId: approveProposal
+      tags: [proposals]
+      summary: Approve proposal
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: Approved proposal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProposalDocument"
+  /proposals/{id}/reject:
+    post:
+      operationId: rejectProposal
+      tags: [proposals]
+      summary: Reject proposal
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProposalRejectBody"
+      responses:
+        "200":
+          description: Rejected proposal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProposalDocument"
+  /proposals/{id}/cancel:
+    post:
+      operationId: cancelProposal
+      tags: [proposals]
+      summary: Cancel proposal
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProposalRejectBody"
+      responses:
+        "200":
+          description: Cancelled proposal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProposalDocument"
+  /proposals/{id}/send:
+    post:
+      operationId: sendProposal
+      tags: [proposals]
+      summary: Mark proposal sent and issue share token
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: Sent proposal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProposalDocument"
+  /proposals/{id}/email:
+    post:
+      operationId: emailProposal
+      tags: [proposals]
+      summary: Email proposal PDF and client portal link
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmailSendBody"
+      responses:
+        "200":
+          description: Email sent
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/EmailSendResult"
+                  - type: object
+                    properties:
+                      shareToken:
+                        type: string
+  /proposals/{id}/share-token:
+    delete:
+      operationId: revokeProposalShareToken
+      tags: [proposals]
+      summary: Revoke proposal share token
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "204":
+          description: Share token revoked
+  /proposals/{id}/share-link:
+    post:
+      operationId: refreshProposalShareLink
+      tags: [proposals]
+      summary: Refresh or generate proposal share token
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: Share link details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProposalShareLink"
+  /proposals/{id}/no-response:
+    post:
+      operationId: markProposalNoResponse
+      tags: [proposals]
+      summary: Mark proposal as no response
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: Updated proposal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProposalDocument"
+  /proposals/{id}/new-revision:
+    post:
+      operationId: createProposalRevision
+      tags: [proposals]
+      summary: Create a new proposal revision
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "201":
+          description: New revision draft
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProposalDocument"
+  /proposals/{id}/pdf:
+    get:
+      operationId: getProposalPdf
+      tags: [proposals]
+      summary: Download proposal PDF (staff)
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: Proposal PDF
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+  /proposals/{id}/activity:
+    get:
+      operationId: listProposalActivity
+      tags: [proposals]
+      summary: List proposal activity log
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: Activity log
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProposalActivity"
+  /proposals/{id}/questions:
+    get:
+      operationId: listProposalQuestions
+      tags: [proposals]
+      summary: List client questions for a proposal
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: Questions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProposalQuestion"
+  /proposals/{id}/questions/{questionId}/reply:
+    post:
+      operationId: replyProposalQuestion
+      tags: [proposals]
+      summary: Reply to a client question
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+        - in: path
+          name: questionId
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProposalQuestionReplyBody"
+      responses:
+        "200":
+          description: Updated question
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProposalQuestionReply"
+  /proposals/{id}/job-order:
+    post:
+      operationId: createJobOrderFromProposal
+      tags: [proposals]
+      summary: Create job order from confirmed proposal
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProposalJobOrderBody"
+      responses:
+        "201":
+          description: Created job order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProposalJobOrderResult"
+  /proposals/{id}/milestones/{index}/invoice:
+    post:
+      operationId: billProposalMilestone
+      tags: [proposals]
+      summary: Create a draft invoice for a payment schedule milestone
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+        - in: path
+          name: index
+          required: true
+          schema:
+            type: integer
+            minimum: 0
+      responses:
+        "201":
+          description: Milestone invoice created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProposalMilestoneBillResult"
+  /proposals/{id}/milestones/invoice-all:
+    post:
+      operationId: billAllProposalMilestones
+      tags: [proposals]
+      summary: Create draft invoices for all unbilled payment milestones
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "201":
+          description: Milestone invoices created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProposalMilestoneBillAllResult"
+  /proposals/{id}/extract-for-job-order:
+    post:
+      operationId: extractProposalForJobOrder
+      tags: [proposals]
+      summary: Extract job order fields from an in-app proposal (cover contact, ISO, scope, approach)
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: Extracted job order fields
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProposalDocumentExtractionResult"
+  /uploads/proposal-cover:
+    post:
+      operationId: uploadProposalCover
+      tags: [proposals]
+      summary: Upload proposal cover or consultant portfolio photo
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "201":
+          description: Uploaded image URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadedImageUrl"
+  /proposals/{id}/public:
+    get:
+      operationId: getProposalPublic
+      tags: [proposals]
+      summary: Public proposal portal metadata
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+        - in: query
+          name: token
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Public proposal metadata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProposalPublicView"
+  /proposals/{id}/pdf/public:
+    get:
+      operationId: getProposalPdfPublic
+      tags: [proposals]
+      summary: Public proposal PDF viewer
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+        - in: query
+          name: token
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Proposal PDF
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+  /proposals/{id}/public/download:
+    post:
+      operationId: downloadProposalPdfPublic
+      tags: [proposals]
+      summary: Download proposal PDF from public portal
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProposalPublicTokenBody"
+      responses:
+        "200":
+          description: Proposal PDF
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+  /proposals/{id}/public/question:
+    post:
+      operationId: submitProposalPublicQuestion
+      tags: [proposals]
+      summary: Submit a question from the public portal
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProposalPublicQuestionBody"
+      responses:
+        "201":
+          description: Question submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkIdResponse"
+  /proposals/{id}/public/confirm:
+    post:
+      operationId: confirmProposalPublic
+      tags: [proposals]
+      summary: Confirm and sign proposal from public portal
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProposalPublicConfirmBody"
+      responses:
+        "200":
+          description: Confirmed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+  /proposals/{id}/public/revise:
+    post:
+      operationId: requestProposalRevisionPublic
+      tags: [proposals]
+      summary: Request proposal revision from public portal
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProposalPublicReviseBody"
+      responses:
+        "200":
+          description: Revision requested
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+  /receipts/{id}/email:
+    post:
+      operationId: emailReceipt
+      tags: [receipts]
+      summary: Send receipt via email
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmailSendBody"
+      responses:
+        "200":
+          description: Email sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmailSendResult"
+components:
+  parameters:
+    IdParam:
+      in: path
+      name: id
+      required: true
+      schema:
+        type: string
+    CertIdParam:
+      in: path
+      name: certId
+      required: true
+      schema:
+        type: string
+    AuditIdParam:
+      in: path
+      name: auditId
+      required: true
+      schema:
+        type: string
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+    Currency:
+      type: string
+      enum: [HKD, USD, CNY, MOP]
+    ServiceCategory:
+      type: string
+      description: Document service classification for reporting and analysis.
+      enum: [setup, main, pen, vscan, others]
+    InvoiceStatus:
+      type: string
+      enum: [draft, pending_approval, approved, sent, revised, paid]
+    QuotationStatus:
+      type: string
+      enum:
+        [
+          draft,
+          pending_approval,
+          sent,
+          skip,
+          approved,
+          canceled,
+          confirmed,
+          invoiced,
+        ]
+    QuotationValidityFilter:
+      type: string
+      enum: [active, expired]
+    QuotationListSortBy:
+      type: string
+      enum:
+        [quotationNumber, quotationDate, validUntil, total, status, createdAt]
+    ClientListSortBy:
+      type: string
+      enum: [name, clientCode, email, createdAt, isActive]
+    SortDirection:
+      type: string
+      enum: [asc, desc]
+    Client:
+      type: object
+      properties:
+        id:
+          type: string
+        clientCode:
+          type: string
+        name:
+          type: string
+        contactPerson:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        addressLine1:
+          type: string
+        addressLine2:
+          type: string
+        addressLine3:
+          type: string
+        addressLine4:
+          type: string
+        country:
+          type: string
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+        certifications:
+          type: array
+          items:
+            $ref: "#/components/schemas/ClientCertification"
+      required: [id, clientCode, name, email, isActive, createdAt]
+    AuditVisitStatus:
+      type: string
+      enum: [sv, rn, sv_rn]
+    ClientCertificationLatestAudit:
+      type: object
+      required: [auditDate]
+      properties:
+        auditDate:
+          type: string
+          format: date
+        status:
+          $ref: "#/components/schemas/AuditVisitStatus"
+    ClientCertification:
+      type: object
+      required: [id, certificationBody, standard]
+      properties:
+        id:
+          type: string
+        certificationBody:
+          type: string
+        standard:
+          type: string
+        latestAudit:
+          $ref: "#/components/schemas/ClientCertificationLatestAudit"
+    ClientCertificationAudit:
+      type: object
+      required: [id, certificationId, auditDate]
+      properties:
+        id:
+          type: string
+        certificationId:
+          type: string
+        auditDate:
+          type: string
+          format: date
+        status:
+          $ref: "#/components/schemas/AuditVisitStatus"
+        notes:
+          type: string
+    ClientCertificationWithAudits:
+      type: object
+      required: [id, certificationBody, standard, audits]
+      properties:
+        id:
+          type: string
+        certificationBody:
+          type: string
+        standard:
+          type: string
+        audits:
+          type: array
+          items:
+            $ref: "#/components/schemas/ClientCertificationAudit"
+    ClientCertificationsView:
+      type: object
+      required: [clientId, certifications]
+      properties:
+        clientId:
+          type: string
+        certifications:
+          type: array
+          items:
+            $ref: "#/components/schemas/ClientCertificationWithAudits"
+    ClientCertificationInput:
+      type: object
+      required: [certificationBody, standard]
+      properties:
+        certificationBody:
+          type: string
+        standard:
+          type: string
+    ClientCertificationPatch:
+      type: object
+      properties:
+        certificationBody:
+          type: string
+        standard:
+          type: string
+    ClientCertificationAuditInput:
+      type: object
+      required: [auditDate]
+      properties:
+        auditDate:
+          type: string
+          format: date
+        status:
+          $ref: "#/components/schemas/AuditVisitStatus"
+        notes:
+          type: string
+    ClientCertificationAuditPatch:
+      type: object
+      properties:
+        auditDate:
+          type: string
+          format: date
+        status:
+          $ref: "#/components/schemas/AuditVisitStatus"
+        notes:
+          type: string
+    ReplaceClientCertificationAuditInput:
+      type: object
+      required: [auditDate]
+      properties:
+        auditDate:
+          type: string
+          format: date
+        status:
+          $ref: "#/components/schemas/AuditVisitStatus"
+        notes:
+          type: string
+    ReplaceClientCertificationInput:
+      type: object
+      required: [certificationBody, standard]
+      properties:
+        certificationBody:
+          type: string
+        standard:
+          type: string
+        audits:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReplaceClientCertificationAuditInput"
+    ReplaceClientCertificationsBody:
+      type: object
+      required: [certifications]
+      properties:
+        certifications:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReplaceClientCertificationInput"
+    ClientInput:
+      type: object
+      properties:
+        clientCode:
+          type: string
+        name:
+          type: string
+        contactPerson:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        addressLine1:
+          type: string
+        addressLine2:
+          type: string
+        addressLine3:
+          type: string
+        addressLine4:
+          type: string
+        country:
+          type: string
+        isActive:
+          type: boolean
+          default: true
+      required: [clientCode, name]
+    ClientPatch:
+      allOf:
+        - $ref: "#/components/schemas/ClientInput"
+    ProposalPaymentScheduleItem:
+      type: object
+      properties:
+        label:
+          type: string
+          description: Free-form milestone label (e.g. "Confirmation of proposal").
+        percentage:
+          type: number
+          description: Percentage of the total amount (0–100).
+      required: [label, percentage]
+    ClientProposal:
+      type: object
+      properties:
+        id:
+          type: string
+        clientId:
+          type: string
+        proposalNo:
+          type: string
+        proposalRevision:
+          type: integer
+          description: Revision number (0, 1, 2, 3, …).
+        currency:
+          $ref: "#/components/schemas/Currency"
+        totalAmount:
+          type: number
+        driveFileUrl:
+          type: string
+          description: Google Drive (or other) link to the proposal file; clickable to preview.
+        paymentSchedule:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProposalPaymentScheduleItem"
+        updatedAt:
+          type: string
+      required:
+        [id, clientId, proposalRevision, currency, totalAmount, paymentSchedule]
+    ClientProposalInput:
+      type: object
+      properties:
+        proposalNo:
+          type: string
+        proposalRevision:
+          type: integer
+          default: 0
+        currency:
+          $ref: "#/components/schemas/Currency"
+        totalAmount:
+          type: number
+          default: 0
+        driveFileUrl:
+          type: string
+        paymentSchedule:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProposalPaymentScheduleItem"
+    ConfirmedQuotationSummary:
+      type: object
+      description: Summary of a client's most recent confirmed (system-generated) quotation.
+      properties:
+        id:
+          type: string
+        quotationNumber:
+          type: string
+        quotationDate:
+          type: string
+        currency:
+          $ref: "#/components/schemas/Currency"
+        total:
+          type: number
+        driveFileUrl:
+          type: string
+          description: Google Drive (or other) link to the confirmed quotation file; clickable to preview.
+      required: [id, quotationNumber, quotationDate, currency, total]
+    ClientProposalView:
+      type: object
+      properties:
+        clientId:
+          type: string
+        confirmedQuotation:
+          $ref: "#/components/schemas/ConfirmedQuotationSummary"
+        proposal:
+          $ref: "#/components/schemas/ClientProposal"
+      required: [clientId]
+    InvoiceLineItem:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+          description: Optional second line(s) of the line-item description; may contain newlines.
+        details:
+          type: string
+        quantity:
+          type: number
+        price:
+          type: number
+        taxRate:
+          type: number
+      required: [name, quantity, price]
+    Invoice:
+      type: object
+      properties:
+        id:
+          type: string
+        clientId:
+          type: string
+        clientName:
+          type: string
+        invoiceNumber:
+          type: string
+        invoiceDate:
+          type: string
+        dueDate:
+          type: string
+        status:
+          $ref: "#/components/schemas/InvoiceStatus"
+        currency:
+          $ref: "#/components/schemas/Currency"
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/InvoiceLineItem"
+        subtotal:
+          type: number
+        taxAmount:
+          type: number
+        discountAmount:
+          type: number
+        total:
+          type: number
+        paidAmount:
+          type: number
+        consultantIds:
+          type: array
+          items:
+            type: string
+        serviceCategory:
+          $ref: "#/components/schemas/ServiceCategory"
+        cancellationReason:
+          type: string
+        notes:
+          type: string
+        internalNote:
+          type: string
+          description: Staff-only internal note. Not shown on the invoice PDF or any customer-facing document. Changing only this field does not revise the invoice.
+        termsConditions:
+          type: string
+        remark:
+          type: string
+        shareToken:
+          type: string
+        shareTokenExpiresAt:
+          type: string
+        createdAt:
+          type: string
+      required:
+        [
+          id,
+          clientId,
+          invoiceNumber,
+          invoiceDate,
+          status,
+          currency,
+          items,
+          subtotal,
+          taxAmount,
+          discountAmount,
+          total,
+          paidAmount,
+          consultantIds,
+          serviceCategory,
+          createdAt,
+        ]
+    InvoiceInput:
+      type: object
+      properties:
+        clientId:
+          type: string
+        invoiceNumber:
+          type: string
+          description: Optional custom invoice number. When omitted on create, a number is auto-generated.
+        invoiceDate:
+          type: string
+        dueDate:
+          type: string
+        status:
+          $ref: "#/components/schemas/InvoiceStatus"
+        currency:
+          $ref: "#/components/schemas/Currency"
+        discountAmount:
+          type: number
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/InvoiceLineItem"
+        consultantIds:
+          type: array
+          items:
+            type: string
+        serviceCategory:
+          $ref: "#/components/schemas/ServiceCategory"
+          default: others
+        cancellationReason:
+          type: string
+        notes:
+          type: string
+        internalNote:
+          type: string
+          description: Staff-only internal note. Not shown on the invoice PDF or any customer-facing document. Changing only this field does not revise the invoice.
+        termsConditions:
+          type: string
+        remark:
+          type: string
+      required: [clientId, invoiceDate, dueDate, currency, items]
+    VoidedInvoice:
+      type: object
+      required: [invoiceNumber, month]
+      properties:
+        id:
+          type: string
+        invoiceNumber:
+          type: string
+        invoiceDate:
+          type: string
+        month:
+          type: string
+          description: Calendar month YYYY-MM derived from the invoice number or date.
+        status:
+          type: string
+        deletedAt:
+          type: string
+        cancellationReason:
+          type: string
+    MissingSequenceSlot:
+      type: object
+      required: [sequence, likelyNumber]
+      properties:
+        sequence:
+          type: integer
+        likelyNumber:
+          type: string
+        alternates:
+          type: array
+          items:
+            type: string
+    DuplicateSequenceSlot:
+      type: object
+      required: [sequence, baseNumbers, invoiceNumbers]
+      properties:
+        sequence:
+          type: integer
+        baseNumbers:
+          type: array
+          items:
+            type: string
+        invoiceNumbers:
+          type: array
+          items:
+            type: string
+    DuplicateBaseNumber:
+      type: object
+      required: [baseNumber, invoiceNumbers]
+      properties:
+        baseNumber:
+          type: string
+        invoiceNumbers:
+          type: array
+          items:
+            type: string
+    ReissuedInvoiceNumber:
+      type: object
+      required: [invoiceNumber]
+      properties:
+        invoiceNumber:
+          type: string
+        voidedInvoiceId:
+          type: string
+        activeInvoiceId:
+          type: string
+    MonthContinuity:
+      type: object
+      required: [month, invoiceCount, missingNumbers, voidedInvoices]
+      properties:
+        month:
+          type: string
+        lastInvoiceNumber:
+          type: string
+          nullable: true
+        invoiceCount:
+          type: integer
+        missingNumbers:
+          type: array
+          items:
+            type: string
+        voidedInvoices:
+          type: array
+          items:
+            $ref: "#/components/schemas/VoidedInvoice"
+    InvoiceContinuityReport:
+      type: object
+      required:
+        [
+          months,
+          lastInvoiceNumberByMonth,
+          missingNumbers,
+          missingSequenceSlots,
+          voidedInvoices,
+          duplicateSequenceSlots,
+          duplicateBaseNumbers,
+          reissuedNumbers,
+          unparsedInvoiceNumbers,
+          intact,
+        ]
+      properties:
+        months:
+          type: array
+          items:
+            $ref: "#/components/schemas/MonthContinuity"
+        lastInvoiceNumberByMonth:
+          type: object
+          additionalProperties:
+            type: string
+            nullable: true
+        missingNumbers:
+          type: array
+          items:
+            type: string
+        missingSequenceSlots:
+          type: array
+          items:
+            $ref: "#/components/schemas/MissingSequenceSlot"
+        voidedInvoices:
+          type: array
+          items:
+            $ref: "#/components/schemas/VoidedInvoice"
+        duplicateSequenceSlots:
+          type: array
+          items:
+            $ref: "#/components/schemas/DuplicateSequenceSlot"
+        duplicateBaseNumbers:
+          type: array
+          items:
+            $ref: "#/components/schemas/DuplicateBaseNumber"
+        reissuedNumbers:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReissuedInvoiceNumber"
+        unparsedInvoiceNumbers:
+          type: array
+          items:
+            type: string
+        intact:
+          type: boolean
+    InvoicePatch:
+      allOf:
+        - $ref: "#/components/schemas/InvoiceInput"
+    ConvertQuotationInput:
+      type: object
+      description: Optional invoice field overrides applied atomically during convert. Omitted fields are copied from the quotation.
+      properties:
+        clientId:
+          type: string
+        invoiceDate:
+          type: string
+        dueDate:
+          type: string
+        status:
+          type: string
+          description: Invoice status at convert time. paid is not allowed; record payments after convert.
+          enum: [draft, pending_approval, approved, sent, revised]
+        currency:
+          $ref: "#/components/schemas/Currency"
+        discountAmount:
+          type: number
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/InvoiceLineItem"
+        consultantIds:
+          type: array
+          items:
+            type: string
+        serviceCategory:
+          $ref: "#/components/schemas/ServiceCategory"
+        notes:
+          type: string
+        internalNote:
+          type: string
+          description: Staff-only internal note. Not shown on the invoice PDF or any customer-facing document.
+        termsConditions:
+          type: string
+        remark:
+          type: string
+    Quotation:
+      type: object
+      properties:
+        id:
+          type: string
+        clientId:
+          type: string
+        clientName:
+          type: string
+        quotationNumber:
+          type: string
+        quotationDate:
+          type: string
+        validUntil:
+          type: string
+        status:
+          $ref: "#/components/schemas/QuotationStatus"
+        currency:
+          $ref: "#/components/schemas/Currency"
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/InvoiceLineItem"
+        subtotal:
+          type: number
+        discountAmount:
+          type: number
+        total:
+          type: number
+        convertedInvoiceId:
+          type: string
+        serviceCategory:
+          $ref: "#/components/schemas/ServiceCategory"
+        cancellationReason:
+          type: string
+        termsConditions:
+          type: string
+        remark:
+          type: string
+        quotationAttn:
+          type: string
+          description: PDF "Attn :" line on quotation (user-editable).
+        driveFileUrl:
+          type: string
+          description: Optional Google Drive (or other) link to the signed/confirmed quotation file.
+        shareToken:
+          type: string
+        shareTokenExpiresAt:
+          type: string
+        createdAt:
+          type: string
+      required:
+        [
+          id,
+          clientId,
+          quotationNumber,
+          quotationDate,
+          status,
+          currency,
+          items,
+          subtotal,
+          discountAmount,
+          total,
+          serviceCategory,
+          createdAt,
+        ]
+    ShareTokenResponse:
+      type: object
+      properties:
+        token:
+          type: string
+        expiresAt:
+          type: string
+      required: [token, expiresAt]
+    QuotationInput:
+      type: object
+      properties:
+        clientId:
+          type: string
+        quotationDate:
+          type: string
+        validUntil:
+          type: string
+        status:
+          $ref: "#/components/schemas/QuotationStatus"
+        currency:
+          $ref: "#/components/schemas/Currency"
+        discountAmount:
+          type: number
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/InvoiceLineItem"
+        serviceCategory:
+          $ref: "#/components/schemas/ServiceCategory"
+          default: others
+        cancellationReason:
+          type: string
+        termsConditions:
+          type: string
+        remark:
+          type: string
+        quotationAttn:
+          type: string
+          description: PDF "Attn :" line on quotation (user-editable).
+        driveFileUrl:
+          type: string
+          description: Optional Google Drive (or other) link to the signed/confirmed quotation file.
+      required: [clientId, quotationDate, validUntil, currency, items]
+    QuotationPatch:
+      allOf:
+        - $ref: "#/components/schemas/QuotationInput"
+    Payment:
+      type: object
+      properties:
+        id:
+          type: string
+        invoiceId:
+          type: string
+        invoiceNumber:
+          type: string
+        clientId:
+          type: string
+        clientName:
+          type: string
+        currency:
+          $ref: "#/components/schemas/Currency"
+        amount:
+          type: number
+        paymentDate:
+          type: string
+        paymentMethod:
+          type: string
+        note:
+          type: string
+        # Enhanced payment tracking fields
+        chequeNumber:
+          type: string
+          description: Cheque number for cheque payments
+        bankName:
+          type: string
+          description: Bank name for bank transfer or cheque payments
+        depositDate:
+          type: string
+          description: Date when the cheque/payment was deposited (YYYY-MM-DD)
+        referenceNumber:
+          type: string
+          description: Bank reference number for the transaction
+        transactionId:
+          type: string
+          description: Online transaction ID
+        invoiceTotal:
+          type: number
+          description: Total amount of the invoice for calculating remaining balance
+        invoicePaidAmount:
+          type: number
+          description: Total amount paid on the invoice so far
+        invoiceStatus:
+          type: string
+          description: Current status of the invoice (e.g., paid, partially_paid)
+        createdAt:
+          type: string
+      required:
+        [id, invoiceId, currency, amount, paymentDate, paymentMethod, createdAt]
+    PaymentInput:
+      type: object
+      properties:
+        invoiceId:
+          type: string
+        amount:
+          type: number
+        paymentDate:
+          type: string
+        paymentMethod:
+          type: string
+        note:
+          type: string
+        # Enhanced payment tracking fields
+        chequeNumber:
+          type: string
+          description: Cheque number for cheque payments
+        bankName:
+          type: string
+          description: Bank name for bank transfer or cheque payments
+        depositDate:
+          type: string
+          description: Date when the cheque/payment was deposited (YYYY-MM-DD)
+        referenceNumber:
+          type: string
+          description: Bank reference number for the transaction
+        transactionId:
+          type: string
+          description: Online transaction ID
+      required: [invoiceId, amount, paymentDate, paymentMethod]
+    PaymentReceipt:
+      type: object
+      properties:
+        id:
+          type: string
+        paymentId:
+          type: string
+        invoiceId:
+          type: string
+        receiptType:
+          type: string
+          enum: [receipt, screenshot, cheque_deposit, other]
+        fileName:
+          type: string
+        fileSize:
+          type: integer
+        mimeType:
+          type: string
+        description:
+          type: string
+        uploadedAt:
+          type: string
+      required:
+        [
+          id,
+          paymentId,
+          invoiceId,
+          receiptType,
+          fileName,
+          fileSize,
+          mimeType,
+          uploadedAt,
+        ]
+    DashboardSummary:
+      type: object
+      properties:
+        revenue:
+          type: number
+        outstanding:
+          type: number
+        invoiceCount:
+          type: integer
+        quotationCount:
+          type: integer
+        clientCount:
+          type: integer
+        revenuePaidThisMonth:
+          type: number
+          description: Sum of paid amounts on invoices dated in the current calendar month
+        revenuePaidPreviousMonth:
+          type: number
+          description: Sum of paid amounts on invoices dated in the previous calendar month
+        invoiceCountThisMonth:
+          type: integer
+          description: Count of invoices dated in the current calendar month
+        invoiceCountPreviousMonth:
+          type: integer
+          description: Count of invoices dated in the previous calendar month
+        clientCountThisMonth:
+          type: integer
+          description: Clients created in the current calendar month
+        clientCountPreviousMonth:
+          type: integer
+          description: Clients created in the previous calendar month
+        monthlyRevenue:
+          type: array
+          items:
+            type: object
+            properties:
+              month:
+                type: string
+              revenue:
+                type: number
+            required: [month, revenue]
+        invoiceStatusBreakdown:
+          type: array
+          items:
+            type: object
+            properties:
+              status:
+                type: string
+              count:
+                type: integer
+            required: [status, count]
+        serviceCategoryRevenue:
+          type: array
+          description: Paid invoice amounts grouped by service category.
+          items:
+            type: object
+            properties:
+              serviceCategory:
+                $ref: "#/components/schemas/ServiceCategory"
+              name:
+                type: string
+              revenue:
+                type: number
+            required: [serviceCategory, name, revenue]
+        consultantRevenue:
+          type: array
+          description: >-
+            Paid invoice amounts attributed to each consultant. For each invoice,
+            the paid amount is divided equally among all consultants assigned to that invoice
+            (e.g. two consultants each receive 50%; three each receive one third).
+          items:
+            type: object
+            properties:
+              consultantId:
+                type: string
+              name:
+                type: string
+              revenue:
+                type: number
+            required: [consultantId, name, revenue]
+        consultantMonthlyRevenue:
+          type: array
+          description: >-
+            Paid invoice amounts attributed to each consultant and invoice month.
+            Each invoice amount is divided equally among its assigned consultants.
+          items:
+            type: object
+            properties:
+              consultantId:
+                type: string
+              name:
+                type: string
+              month:
+                type: string
+                description: Calendar month in YYYY-MM format
+              revenue:
+                type: number
+            required: [consultantId, name, month, revenue]
+      required:
+        [
+          revenue,
+          outstanding,
+          invoiceCount,
+          quotationCount,
+          clientCount,
+          revenuePaidThisMonth,
+          revenuePaidPreviousMonth,
+          invoiceCountThisMonth,
+          invoiceCountPreviousMonth,
+          clientCountThisMonth,
+          clientCountPreviousMonth,
+          monthlyRevenue,
+          invoiceStatusBreakdown,
+          serviceCategoryRevenue,
+          consultantRevenue,
+          consultantMonthlyRevenue,
+        ]
+    ActivityItem:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+        title:
+          type: string
+        detail:
+          type: string
+        createdAt:
+          type: string
+      required: [id, type, title, detail, createdAt]
+    PaginatedClients:
+      type: object
+      required: [data, total, page, pageSize]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Client"
+        total:
+          type: integer
+        page:
+          type: integer
+        pageSize:
+          type: integer
+    PaginatedInvoices:
+      type: object
+      required: [data, total, page, pageSize]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Invoice"
+        total:
+          type: integer
+        page:
+          type: integer
+        pageSize:
+          type: integer
+    PaginatedQuotations:
+      type: object
+      required: [data, total, page, pageSize]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Quotation"
+        total:
+          type: integer
+        page:
+          type: integer
+        pageSize:
+          type: integer
+    PaginatedPayments:
+      type: object
+      required: [data, total, page, pageSize]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Payment"
+        total:
+          type: integer
+        page:
+          type: integer
+        pageSize:
+          type: integer
+    Receipt:
+      type: object
+      properties:
+        id:
+          type: string
+        receiptNumber:
+          type: string
+        invoiceId:
+          type: string
+        invoiceNumber:
+          type: string
+        clientId:
+          type: string
+        clientName:
+          type: string
+        paymentId:
+          type: string
+          description: The specific payment this receipt documents, when generated from one.
+        amount:
+          type: number
+        currency:
+          $ref: "#/components/schemas/Currency"
+        chequeNumber:
+          type: string
+        chequeDetails:
+          type: string
+        receiptDate:
+          type: string
+        notes:
+          type: string
+        createdAt:
+          type: string
+      required: [id, receiptNumber, amount, currency, receiptDate, createdAt]
+    ReceiptInput:
+      type: object
+      properties:
+        invoiceId:
+          type: string
+        clientId:
+          type: string
+        paymentId:
+          type: string
+          description: Optional payment this receipt documents. Must belong to the same invoice.
+        amount:
+          type: number
+        currency:
+          $ref: "#/components/schemas/Currency"
+        chequeNumber:
+          type: string
+        chequeDetails:
+          type: string
+        receiptDate:
+          type: string
+        notes:
+          type: string
+      required: [invoiceId, amount, currency, receiptDate]
+    ReceiptPatch:
+      allOf:
+        - $ref: "#/components/schemas/ReceiptInput"
+    PaginatedReceipts:
+      type: object
+      required: [data, total, page, pageSize]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Receipt"
+        total:
+          type: integer
+        page:
+          type: integer
+        pageSize:
+          type: integer
+    ReceiptsStats:
+      type: object
+      required: [totalAmount, count, clientCount, invoiceCount]
+      properties:
+        totalAmount:
+          type: number
+        count:
+          type: integer
+        clientCount:
+          type: integer
+        invoiceCount:
+          type: integer
+    QuotationTemplate:
+      type: object
+      required:
+        [id, name, items, currency, discountAmount, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/InvoiceLineItem"
+        currency:
+          $ref: "#/components/schemas/Currency"
+        discountAmount:
+          type: number
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+    QuotationTemplateInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/InvoiceLineItem"
+        currency:
+          $ref: "#/components/schemas/Currency"
+        discountAmount:
+          type: number
+    QuotationTemplatePatch:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/InvoiceLineItem"
+        currency:
+          $ref: "#/components/schemas/Currency"
+        discountAmount:
+          type: number
+        sortOrder:
+          type: integer
+    PaginatedQuotationTemplates:
+      type: object
+      required: [data, total, page, pageSize]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/QuotationTemplate"
+        total:
+          type: integer
+        page:
+          type: integer
+        pageSize:
+          type: integer
+    CsvImportResult:
+      type: object
+      required: [previewCount, errors]
+      properties:
+        previewCount:
+          type: integer
+          description: Rows that passed validation (invoice import excludes invalid rows from this count).
+        totalRowsInFile:
+          type: integer
+          description: Total data rows parsed from the CSV (invoice import).
+        errors:
+          type: array
+          items:
+            type: string
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+    OkResponse:
+      type: object
+      required: [ok]
+      properties:
+        ok:
+          type: boolean
+    OkIdResponse:
+      type: object
+      required: [ok, id]
+      properties:
+        ok:
+          type: boolean
+        id:
+          type: string
+          format: uuid
+    UploadedImageUrl:
+      type: object
+      required: [url]
+      properties:
+        url:
+          type: string
+    ProposalStatus:
+      type: string
+      enum:
+        [
+          draft,
+          pending_approval,
+          approved,
+          sent,
+          confirmed,
+          revision_requested,
+          no_response,
+          rejected,
+          expired,
+          superseded,
+          cancelled,
+        ]
+    ProposalCertificationLocation:
+      type: object
+      required: [address, staffCount]
+      properties:
+        address:
+          type: string
+        staffCount:
+          type: integer
+    ProposalPhase:
+      type: object
+      required: [phase, title, description, weeks, startMonth, spanMonths]
+      properties:
+        phase:
+          type: integer
+        title:
+          type: string
+        description:
+          type: string
+        deliverable:
+          type: string
+        weeks:
+          type: integer
+        startMonth:
+          type: integer
+        spanMonths:
+          type: integer
+    ProposalConsultantPortfolioItem:
+      type: object
+      required: [consultantId]
+      properties:
+        consultantId:
+          type: string
+          format: uuid
+        photoUrl:
+          type: string
+        bio:
+          type: string
+    ProposalJobReference:
+      type: object
+      required: [clientName, projectTitle]
+      properties:
+        clientName:
+          type: string
+        projectTitle:
+          type: string
+        description:
+          type: string
+        photoUrl:
+          type: string
+    ProposalTestimonial:
+      type: object
+      required: [quote, authorName]
+      properties:
+        quote:
+          type: string
+        authorName:
+          type: string
+        authorTitle:
+          type: string
+        companyName:
+          type: string
+        photoUrl:
+          type: string
+    ProposalTemplateData:
+      type: object
+      properties:
+        proposalTitle:
+          type: string
+        salesContact:
+          type: object
+          properties:
+            name:
+              type: string
+            title:
+              type: string
+            phone:
+              type: string
+            email:
+              type: string
+        certificationBody:
+          type: object
+          properties:
+            enabled:
+              type: boolean
+            name:
+              type: string
+            shortName:
+              type: string
+            logoUrl:
+              type: string
+            description:
+              type: string
+            accreditationName:
+              type: string
+            accreditationDescription:
+              type: string
+        optionalMaintenance:
+          type: object
+          properties:
+            enabled:
+              type: boolean
+            supportHours:
+              type: string
+        feeRows:
+          type: array
+          items:
+            type: object
+            required: [year]
+            properties:
+              year:
+                type: string
+              consultancyFee:
+                type: number
+              certificationFee:
+                type: number
+        terms:
+          type: object
+          properties:
+            commencementDays:
+              type: integer
+            invoiceDueDays:
+              type: integer
+            claimsCap:
+              type: string
+            certificationGuaranteeEnabled:
+              type: boolean
+        auditType:
+          type: string
+    ProposalSetupTemplate:
+      type: object
+      required: [label, isoStandards, scopePhases, paymentSchedule]
+      properties:
+        label:
+          type: string
+        description:
+          type: string
+        isoStandards:
+          type: array
+          items:
+            type: string
+        proposalScope:
+          type: string
+        scopePhases:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProposalPhase"
+        paymentSchedule:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProposalPaymentScheduleItem"
+        termsConditions:
+          type: string
+        jobReferenceTemplateIds:
+          type: array
+          items:
+            type: string
+        testimonialTemplateIds:
+          type: array
+          items:
+            type: string
+    ProposalSetupTemplates:
+      type: object
+      properties:
+        iso9001:
+          $ref: "#/components/schemas/ProposalSetupTemplate"
+        iso14001-45001:
+          $ref: "#/components/schemas/ProposalSetupTemplate"
+        iso27001:
+          $ref: "#/components/schemas/ProposalSetupTemplate"
+    ProposalSetupTemplatesPatch:
+      type: object
+      properties:
+        iso9001:
+          $ref: "#/components/schemas/ProposalSetupTemplate"
+        iso14001-45001:
+          $ref: "#/components/schemas/ProposalSetupTemplate"
+        iso27001:
+          $ref: "#/components/schemas/ProposalSetupTemplate"
+    ProposalsDashboard:
+      type: object
+      required:
+        [
+          totalCount,
+          pipelineCount,
+          pipelineValue,
+          confirmedCount,
+          confirmedValue,
+          statusBreakdown,
+          isoBreakdown,
+          needsAttention,
+          expiringSoon,
+          recentActivity,
+          recentProposals,
+        ]
+      properties:
+        totalCount:
+          type: integer
+        pipelineCount:
+          type: integer
+        pipelineValue:
+          type: number
+        confirmedCount:
+          type: integer
+        confirmedValue:
+          type: number
+        pendingApprovalCount:
+          type: integer
+        sentCount:
+          type: integer
+        pipelineCountThisMonth:
+          type: integer
+        pipelineCountPreviousMonth:
+          type: integer
+        confirmedCountThisMonth:
+          type: integer
+        confirmedCountPreviousMonth:
+          type: integer
+        statusBreakdown:
+          type: array
+          items:
+            type: object
+            required: [status, count, value]
+            properties:
+              status:
+                $ref: "#/components/schemas/ProposalStatus"
+              count:
+                type: integer
+              value:
+                type: number
+        isoBreakdown:
+          type: array
+          items:
+            type: object
+            required: [standard, count, value]
+            properties:
+              standard:
+                type: string
+              count:
+                type: integer
+              value:
+                type: number
+        needsAttention:
+          type: array
+          items:
+            type: object
+            required:
+              [id, proposalNo, status, totalAmount, currency, reason, updatedAt]
+            properties:
+              id:
+                type: string
+                format: uuid
+              proposalNo:
+                type: string
+              clientName:
+                type: string
+              status:
+                $ref: "#/components/schemas/ProposalStatus"
+              totalAmount:
+                type: number
+              currency:
+                $ref: "#/components/schemas/Currency"
+              reason:
+                type: string
+              updatedAt:
+                type: string
+        expiringSoon:
+          type: array
+          items:
+            type: object
+            required: [id, proposalNo, status, totalAmount, currency, updatedAt]
+            properties:
+              id:
+                type: string
+                format: uuid
+              proposalNo:
+                type: string
+              clientName:
+                type: string
+              status:
+                $ref: "#/components/schemas/ProposalStatus"
+              totalAmount:
+                type: number
+              currency:
+                $ref: "#/components/schemas/Currency"
+              validUntil:
+                type: string
+              updatedAt:
+                type: string
+        recentActivity:
+          type: array
+          items:
+            type: object
+            required:
+              [id, proposalId, proposalNo, eventType, actorType, createdAt]
+            properties:
+              id:
+                type: string
+                format: uuid
+              proposalId:
+                type: string
+                format: uuid
+              proposalNo:
+                type: string
+              clientName:
+                type: string
+              eventType:
+                type: string
+              eventData:
+                type: object
+                additionalProperties: true
+              actorType:
+                type: string
+              createdAt:
+                type: string
+        recentProposals:
+          type: array
+          items:
+            type: object
+            required: [id, proposalNo, status, totalAmount, currency, updatedAt]
+            properties:
+              id:
+                type: string
+                format: uuid
+              proposalNo:
+                type: string
+              clientName:
+                type: string
+              status:
+                $ref: "#/components/schemas/ProposalStatus"
+              totalAmount:
+                type: number
+              currency:
+                $ref: "#/components/schemas/Currency"
+              updatedAt:
+                type: string
+    ProposalDocument:
+      type: object
+      required:
+        [
+          id,
+          clientId,
+          proposalNo,
+          proposalRevision,
+          status,
+          isoStandards,
+          scopePhases,
+          consultantIds,
+          currency,
+          totalAmount,
+          paymentSchedule,
+          createdAt,
+          updatedAt,
+        ]
+      properties:
+        id:
+          type: string
+          format: uuid
+        clientId:
+          type: string
+          format: uuid
+        clientName:
+          type: string
+        proposalNo:
+          type: string
+        proposalRevision:
+          type: integer
+        status:
+          $ref: "#/components/schemas/ProposalStatus"
+        validFrom:
+          type: string
+        validUntil:
+          type: string
+        coverPhotoUrl:
+          type: string
+        firmIntro:
+          type: string
+        certificationBodyIntro:
+          type: string
+        clientStaffCount:
+          type: integer
+        isoStandards:
+          type: array
+          items:
+            type: string
+        proposalScope:
+          type: string
+        certificationLocations:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProposalCertificationLocation"
+        templateData:
+          $ref: "#/components/schemas/ProposalTemplateData"
+        scopePhases:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProposalPhase"
+        pmToolsIntro:
+          type: string
+        trainingPlatformIntro:
+          type: string
+        termsConditions:
+          type: string
+        consultantIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+        consultantPortfolio:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProposalConsultantPortfolioItem"
+        jobReferences:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProposalJobReference"
+        testimonials:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProposalTestimonial"
+        currency:
+          $ref: "#/components/schemas/Currency"
+        totalAmount:
+          type: number
+        paymentSchedule:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProposalPaymentScheduleItem"
+        milestoneInvoices:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProposalMilestoneInvoice"
+        shareToken:
+          type: string
+        shareTokenExpiresAt:
+          type: string
+        jobOrderId:
+          type: string
+          format: uuid
+        revisionRequestComment:
+          type: string
+        clientConfirmedAt:
+          type: string
+        clientSignatureName:
+          type: string
+        submittedAt:
+          type: string
+        approvedAt:
+          type: string
+        sentAt:
+          type: string
+        supersededById:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+    ProposalInput:
+      allOf:
+        - $ref: "#/components/schemas/ProposalPatch"
+        - type: object
+          required: [clientId]
+          properties:
+            clientId:
+              type: string
+              format: uuid
+    ProposalPatch:
+      type: object
+      properties:
+        clientId:
+          type: string
+          format: uuid
+        validFrom:
+          type: string
+        validUntil:
+          type: string
+        coverPhotoUrl:
+          type: string
+          nullable: true
+        firmIntro:
+          type: string
+        certificationBodyIntro:
+          type: string
+        clientStaffCount:
+          type: integer
+          nullable: true
+        isoStandards:
+          type: array
+          items:
+            type: string
+        proposalScope:
+          type: string
+        certificationLocations:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProposalCertificationLocation"
+        templateData:
+          $ref: "#/components/schemas/ProposalTemplateData"
+        scopePhases:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProposalPhase"
+        pmToolsIntro:
+          type: string
+        trainingPlatformIntro:
+          type: string
+        termsConditions:
+          type: string
+        consultantIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+        consultantPortfolio:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProposalConsultantPortfolioItem"
+        jobReferences:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProposalJobReference"
+        testimonials:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProposalTestimonial"
+        currency:
+          $ref: "#/components/schemas/Currency"
+        totalAmount:
+          type: number
+        paymentSchedule:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProposalPaymentScheduleItem"
+    PaginatedProposals:
+      type: object
+      required: [data, total, page, pageSize]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProposalDocument"
+        total:
+          type: integer
+        page:
+          type: integer
+        pageSize:
+          type: integer
+    ProposalRejectBody:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 4000
+    ProposalShareLink:
+      type: object
+      required: [shareToken]
+      properties:
+        shareToken:
+          type: string
+        shareTokenExpiresAt:
+          type: string
+    ProposalActivity:
+      type: object
+      required: [id, eventType, actorType, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        eventType:
+          type: string
+        eventData:
+          type: object
+          additionalProperties: true
+        actorType:
+          type: string
+        createdAt:
+          type: string
+    ProposalQuestion:
+      type: object
+      required: [id, questionText, status, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        questionText:
+          type: string
+        clientName:
+          type: string
+        clientEmail:
+          type: string
+        status:
+          type: string
+        staffReply:
+          type: string
+        repliedAt:
+          type: string
+        createdAt:
+          type: string
+    ProposalQuestionReplyBody:
+      type: object
+      required: [reply]
+      properties:
+        reply:
+          type: string
+          maxLength: 4000
+    ProposalQuestionReply:
+      type: object
+      required: [id, staffReply, status]
+      properties:
+        id:
+          type: string
+          format: uuid
+        staffReply:
+          type: string
+        status:
+          type: string
+        repliedAt:
+          type: string
+    ProposalJobOrderBody:
+      type: object
+      properties:
+        consultantIds:
+          type: array
+          maxItems: 3
+          items:
+            type: string
+            format: uuid
+    ProposalJobOrderResult:
+      type: object
+      required: [id, jobOrderNumber, clientId, status]
+      properties:
+        id:
+          type: string
+          format: uuid
+        jobOrderNumber:
+          type: string
+        clientId:
+          type: string
+          format: uuid
+        status:
+          type: string
+        milestoneInvoice:
+          $ref: "#/components/schemas/MilestoneInvoiceResult"
+    ProposalMilestoneInvoice:
+      type: object
+      required: [scheduleIndex, label, invoiceId, invoiceNumber, invoicedAt]
+      properties:
+        scheduleIndex:
+          type: integer
+        label:
+          type: string
+        invoiceId:
+          type: string
+          format: uuid
+        invoiceNumber:
+          type: string
+        invoicedAt:
+          type: string
+    MilestoneInvoiceResult:
+      type: object
+      required: [invoiceId, invoiceNumber, scheduleIndex, label, amount]
+      properties:
+        invoiceId:
+          type: string
+          format: uuid
+        invoiceNumber:
+          type: string
+        scheduleIndex:
+          type: integer
+        label:
+          type: string
+        amount:
+          type: number
+    ProposalMilestoneBillResult:
+      type: object
+      required: [invoice, proposal]
+      properties:
+        invoice:
+          $ref: "#/components/schemas/MilestoneInvoiceResult"
+        proposal:
+          $ref: "#/components/schemas/ProposalDocument"
+    ProposalMilestoneBillAllResult:
+      type: object
+      required: [created, errors, proposal]
+      properties:
+        created:
+          type: array
+          items:
+            $ref: "#/components/schemas/MilestoneInvoiceResult"
+        errors:
+          type: array
+          items:
+            type: string
+        proposal:
+          $ref: "#/components/schemas/ProposalDocument"
+    ProposalApproachPhase:
+      type: object
+      required: [phase, title, clientService, clientResponsibility, deliverable]
+      properties:
+        phase:
+          type: integer
+        title:
+          type: string
+        clientService:
+          type: string
+        clientResponsibility:
+          type: string
+        deliverable:
+          type: string
+    ProposalExtractionFields:
+      type: object
+      required:
+        - contactPerson
+        - contactEmail
+        - contactPhone
+        - isoStandards
+        - proposedScopeOfCertification
+        - stages
+        - scopeOfService
+        - clientService
+        - clientResponsibilities
+        - approachPhases
+        - deliverables
+        - timeline
+      properties:
+        contactPerson:
+          type: string
+          description: Client contact person from the proposal cover (Prepared for)
+        contactEmail:
+          type: string
+          description: Cover email when present
+        contactPhone:
+          type: string
+          description: Cover telephone when present
+        isoStandards:
+          type: array
+          items:
+            type: string
+        proposedScopeOfCertification:
+          type: string
+        stages:
+          type: array
+          items:
+            type: string
+        scopeOfService:
+          type: string
+        clientService:
+          type: string
+          description: Consulting services offered to the client (from The Approach)
+        clientResponsibilities:
+          type: string
+        approachPhases:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProposalApproachPhase"
+        deliverables:
+          type: array
+          items:
+            type: string
+        timeline:
+          type: string
+    ProposalExtractionLineItem:
+      type: object
+      required: [name, description, details]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        details:
+          type: string
+    ProposalDocumentExtractionResult:
+      type: object
+      required: [fields, notes, lineItem, source, proposalId, textPreview]
+      properties:
+        fields:
+          $ref: "#/components/schemas/ProposalExtractionFields"
+        notes:
+          type: string
+        lineItem:
+          $ref: "#/components/schemas/ProposalExtractionLineItem"
+        source:
+          type: string
+        proposalId:
+          type: string
+          format: uuid
+        textPreview:
+          type: string
+    ClientProposalMigrateResult:
+      type: object
+      required: [proposalId, proposalNo, clientId]
+      properties:
+        proposalId:
+          type: string
+          format: uuid
+        proposalNo:
+          type: string
+        clientId:
+          type: string
+          format: uuid
+        migrated:
+          type: boolean
+        alreadyExists:
+          type: boolean
+    ProposalPublicView:
+      type: object
+      required:
+        [id, proposalNo, proposalRevision, status, canConfirm, canRevise]
+      properties:
+        id:
+          type: string
+          format: uuid
+        proposalNo:
+          type: string
+        proposalRevision:
+          type: integer
+        status:
+          $ref: "#/components/schemas/ProposalStatus"
+        clientName:
+          type: string
+        validUntil:
+          type: string
+        canConfirm:
+          type: boolean
+        canRevise:
+          type: boolean
+    ProposalPublicTokenBody:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
+    ProposalPublicQuestionBody:
+      type: object
+      required: [token, questionText]
+      properties:
+        token:
+          type: string
+        questionText:
+          type: string
+          maxLength: 4000
+        clientName:
+          type: string
+        clientEmail:
+          type: string
+          format: email
+    ProposalPublicConfirmBody:
+      type: object
+      required: [token, signatureName]
+      properties:
+        token:
+          type: string
+        signatureName:
+          type: string
+          maxLength: 200
+    ProposalPublicReviseBody:
+      type: object
+      required: [token, comment]
+      properties:
+        token:
+          type: string
+        comment:
+          type: string
+          maxLength: 4000
+    EmailSendBody:
+      type: object
+      properties:
+        to:
+          type: string
+          format: email
+        slot:
+          type: integer
+          description: Gmail account slot to use (1 or 2)
+          minimum: 1
+          maximum: 2
+        cc:
+          type: string
+          format: email
+        bcc:
+          type: string
+          format: email
+        contactPersonOverride:
+          type: string
+          description: >
+            Optional display name for {{contact_person}} in the email template
+            when sending a quotation (does not change the recipient address).
+          maxLength: 500
+    EmailSendResult:
+      type: object
+      required: [ok, message]
+      properties:
+        ok:
+          type: boolean
+        message:
+          type: string
