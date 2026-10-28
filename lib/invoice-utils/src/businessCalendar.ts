@@ -1,11 +1,17 @@
 /** Default business calendar when `TZ` is unset (HK-centric app). */
 export const DEFAULT_BUSINESS_TIMEZONE = "Asia/Hong_Kong";
 
-/** IANA zone for cron and “today”. `TZ` overrides the Hong Kong default. */
+/**
+ * IANA zone for cron and “today”. `BUSINESS_TIME_ZONE`, then `TZ`, override the
+ * Hong Kong default. Vercel/AWS Lambda reserve `TZ` and set it to the POSIX form
+ * `:UTC`, which Intl rejects, so a `TZ` starting with ":" is ignored.
+ */
 export function businessTimeZone(): string {
-  if (typeof process !== "undefined" && process.env?.TZ?.trim()) {
-    return process.env.TZ.trim();
-  }
+  if (typeof process === "undefined") return DEFAULT_BUSINESS_TIMEZONE;
+  const explicit = process.env?.BUSINESS_TIME_ZONE?.trim();
+  if (explicit) return explicit;
+  const tz = process.env?.TZ?.trim();
+  if (tz && !tz.startsWith(":")) return tz;
   return DEFAULT_BUSINESS_TIMEZONE;
 }
 

@@ -61,3 +61,6 @@ artifacts/api-server/.env
 postgres-data/
 postgres-run/
 .env
+
+# Vercel build output / CLI link
+.vercel

@@ -7,6 +7,9 @@ export const DEFAULT_VOLUME_PUBLIC_UPLOAD_DIR = "/data/public-objects";
 export const DEFAULT_VOLUME_PRIVATE_UPLOAD_DIR = "/data/private-objects";
 export const DEFAULT_DEV_PUBLIC_UPLOAD_DIR = ".local/public-objects";
 export const DEFAULT_DEV_PRIVATE_UPLOAD_DIR = ".local/private-objects";
+/** Vercel Functions can only write to /tmp, and it is wiped between instances. */
+export const SERVERLESS_PUBLIC_UPLOAD_DIR = "/tmp/public-objects";
+export const SERVERLESS_PRIVATE_UPLOAD_DIR = "/tmp/private-objects";
 
 const EPHEMERAL_FS = new Set([
   "overlay",
@@ -129,6 +132,7 @@ export function resolveLocalPublicUploadRoot(): string {
   if (envFlagEnabled("PERSIST_LOCAL_UPLOADS") || isUploadVolumeMounted()) {
     return DEFAULT_VOLUME_PUBLIC_UPLOAD_DIR;
   }
+  if (process.env.VERCEL) return SERVERLESS_PUBLIC_UPLOAD_DIR;
   return DEFAULT_DEV_PUBLIC_UPLOAD_DIR;
 }
 
@@ -138,6 +142,7 @@ export function resolveLocalPrivateUploadRoot(): string {
   if (envFlagEnabled("PERSIST_LOCAL_UPLOADS") || isUploadVolumeMounted()) {
     return DEFAULT_VOLUME_PRIVATE_UPLOAD_DIR;
   }
+  if (process.env.VERCEL) return SERVERLESS_PRIVATE_UPLOAD_DIR;
   return DEFAULT_DEV_PRIVATE_UPLOAD_DIR;
 }
 

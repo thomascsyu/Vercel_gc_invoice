@@ -34,7 +34,13 @@ export function assertProductionSecurityConfig(): void {
   }
 
   const uploadStorage = new ObjectStorageService().getUploadStorageStatus();
-  if (!uploadStorage.persistent) {
+  if (process.env["VERCEL"] && uploadStorage.backend !== "gcs") {
+    logger.warn(
+      "Running on Vercel without Google Cloud Storage: logos, chops, and receipt uploads go " +
+        "to /tmp and disappear when the function instance is recycled. Set " +
+        "PUBLIC_OBJECT_SEARCH_PATHS, PRIVATE_OBJECT_DIR and GCS_SERVICE_ACCOUNT_JSON.",
+    );
+  } else if (!uploadStorage.persistent) {
     logger.warn(
       "Branding uploads (header logo, company logo, company chop/stamp) are on ephemeral " +
         "container disk and are lost when the container is recreated. On the Ubuntu host, " +

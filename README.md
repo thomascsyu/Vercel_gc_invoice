@@ -481,6 +481,8 @@ pnpm --filter @workspace/invoiceplane run build
 
 ## Deployment
 
+> **Vercel:** the app can also be deployed to Vercel (static SPA + one serverless API function + Vercel Cron). See [docs/DEPLOY_VERCEL.md](docs/DEPLOY_VERCEL.md).
+
 Production runs on an **Alibaba Cloud Simple Application Server** in **China (Hong Kong)** with **Ubuntu 24.04**. One Docker container serves both `/api/*` and the InvoicePlane SPA. Nginx on the same server terminates TLS with Let’s Encrypt. Run **one** app container: the quotation-reminder and recurring-invoice jobs live in that process.
 
 This server’s subscription ends on **17 Nov 2026**. Renew it in the console before that date. An expired server stops the site even when the app itself is healthy.

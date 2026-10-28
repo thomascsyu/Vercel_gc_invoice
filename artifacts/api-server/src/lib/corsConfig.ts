@@ -23,6 +23,16 @@ export function loadAllowedCorsOrigins(): Set<string> {
     const o = normalizeOriginInput(pub);
     if (o) set.add(o);
   }
+  // On Vercel the SPA and API share an origin, but browsers still send Origin
+  // on POSTs. Allow this deployment's own URLs (preview, branch, production)
+  // so preview deploys work without editing CORS_ALLOWED_ORIGINS each time.
+  if (process.env["VERCEL"]) {
+    for (const name of ["VERCEL_URL", "VERCEL_BRANCH_URL", "VERCEL_PROJECT_PRODUCTION_URL"]) {
+      const host = process.env[name]?.trim();
+      const o = host ? normalizeOriginInput(host) : null;
+      if (o) set.add(o);
+    }
+  }
   const extra = process.env["CORS_ALLOWED_ORIGINS"] ?? "";
   for (const part of extra.split(",")) {
     const o = normalizeOriginInput(part);

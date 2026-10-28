@@ -10,7 +10,7 @@ import {
   createPublicRateLimitGate,
   isPublicRateLimitedPath,
   shouldSkipSharedApiRateLimit,
-} from "./rateLimitPaths.ts";
+} from "./rateLimitPaths";
 
 const here = dirname(fileURLToPath(import.meta.url));
 

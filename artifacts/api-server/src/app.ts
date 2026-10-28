@@ -140,7 +140,8 @@ if (staticRoot) {
       if (err) next(err);
     });
   });
-} else {
+} else if (!process.env["VERCEL"]) {
+  // On Vercel the SPA is served from the CDN (.vercel/output/static), not this process.
   logger.warn(
     "InvoicePlane build not found beside API (no index.html). Only /api is served — build the frontend in the Docker image or set INVOICEPLANE_STATIC_ROOT.",
   );
