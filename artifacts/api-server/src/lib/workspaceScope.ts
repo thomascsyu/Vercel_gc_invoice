@@ -1,6 +1,5 @@
-import { db, usersTable } from "@workspace/db";
-import { and, asc, eq } from "drizzle-orm";
-import type { Request } from "express";
+import { companySettingsTable, db, usersTable } from "@workspace/db";
+import { and, asc, eq, isNull } from "drizzle-orm";
 import { getCompanySettings, invalidateCompanySettingsCache } from "./companySettingsCache";
 import { logger } from "./logger";
 import type { AuthedRequest } from "./auth/requireAuth";
@@ -9,13 +8,23 @@ const CACHE_TTL_MS = 60_000;
 
 let cachedDataUserId: string | undefined;
 let cachedAt = 0;
+let warnedInvalidEnvSub: string | undefined;
 
 function envWorkspaceDataUserId(): string | undefined {
   const raw = process.env["WORKSPACE_DATA_USER_ID"]?.trim();
   return raw || undefined;
 }
 
-async function fallbackWorkspaceDataUserId(): Promise<string> {
+async function userExists(googleSub: string): Promise<boolean> {
+  const [row] = await db
+    .select({ googleSub: usersTable.googleSub })
+    .from(usersTable)
+    .where(eq(usersTable.googleSub, googleSub))
+    .limit(1);
+  return Boolean(row);
+}
+
+async function oldestAdminOrUser(): Promise<string> {
   const [admin] = await db
     .select({ googleSub: usersTable.googleSub })
     .from(usersTable)
@@ -37,30 +46,67 @@ async function fallbackWorkspaceDataUserId(): Promise<string> {
 }
 
 /**
+ * Picks the oldest admin once and pins it in company settings so the owner never
+ * drifts when roles or activation change later. Only fills a NULL column, so
+ * concurrent instances converge on whichever value was written first.
+ */
+async function pinFallbackWorkspaceDataUserId(): Promise<string> {
+  const candidate = await oldestAdminOrUser();
+  const [pinned] = await db
+    .update(companySettingsTable)
+    .set({ workspaceDataUserId: candidate })
+    .where(isNull(companySettingsTable.workspaceDataUserId))
+    .returning({ workspaceDataUserId: companySettingsTable.workspaceDataUserId });
+  invalidateCompanySettingsCache();
+  if (pinned?.workspaceDataUserId) {
+    logger.warn(
+      { workspaceDataUserId: pinned.workspaceDataUserId },
+      "workspace_data_user_id was unset; pinned the oldest admin as the workspace data owner",
+    );
+    return pinned.workspaceDataUserId;
+  }
+  const settings = await getCompanySettings({ fresh: true });
+  const existing = settings?.workspaceDataUserId?.trim();
+  if (existing) return existing;
+  // No company settings row yet — use the candidate without pinning; the next
+  // resolution after settings are created will pin it.
+  return candidate;
+}
+
+/**
  * Google sub used to scope all shared business records.
- * Precedence: WORKSPACE_DATA_USER_ID env → company_settings.workspace_data_user_id → oldest admin → oldest user.
+ * Precedence: WORKSPACE_DATA_USER_ID env (if it names a real user) →
+ * company_settings.workspace_data_user_id → oldest admin (pinned into company settings).
  */
 export async function resolveWorkspaceDataUserId(): Promise<string> {
-  const fromEnv = envWorkspaceDataUserId();
-  if (fromEnv) return fromEnv;
-
   const now = Date.now();
   if (cachedDataUserId && now - cachedAt < CACHE_TTL_MS) {
     return cachedDataUserId;
   }
 
-  const settings = await getCompanySettings();
-  const fromSettings = settings?.workspaceDataUserId?.trim();
-  if (fromSettings) {
-    cachedDataUserId = fromSettings;
-    cachedAt = now;
-    return fromSettings;
+  let resolved: string | undefined;
+
+  const fromEnv = envWorkspaceDataUserId();
+  if (fromEnv) {
+    if (await userExists(fromEnv)) {
+      resolved = fromEnv;
+    } else if (warnedInvalidEnvSub !== fromEnv) {
+      warnedInvalidEnvSub = fromEnv;
+      logger.error(
+        { workspaceDataUserId: fromEnv },
+        "WORKSPACE_DATA_USER_ID does not match any invoiceplane_users.google_sub; ignoring it",
+      );
+    }
   }
 
-  const fallback = await fallbackWorkspaceDataUserId();
-  cachedDataUserId = fallback;
+  if (!resolved) {
+    const settings = await getCompanySettings();
+    resolved = settings?.workspaceDataUserId?.trim() || (await pinFallbackWorkspaceDataUserId());
+  }
+
+  cachedDataUserId = resolved;
   cachedAt = now;
-  return fallback;
+  return resolved;
 }
 
 export function invalidateWorkspaceDataUserCache(): void {
@@ -71,22 +117,6 @@ export function invalidateWorkspaceDataUserCache(): void {
 export function invalidateWorkspaceScopeCaches(): void {
   invalidateCompanySettingsCache();
   invalidateWorkspaceDataUserCache();
-}
-
-export type WorkspaceScope = {
-  actorUserId: string;
-  dataUserId: string;
-  role: "admin" | "user";
-};
-
-export async function getWorkspaceScope(req: Request): Promise<WorkspaceScope> {
-  const areq = req as AuthedRequest;
-  const dataUserId = areq.dataUserId ?? (await resolveWorkspaceDataUserId());
-  return {
-    actorUserId: areq.userId,
-    dataUserId,
-    role: areq.role,
-  };
 }
 
 /** Attach `dataUserId` on an authenticated request (call after session/API key resolution). */

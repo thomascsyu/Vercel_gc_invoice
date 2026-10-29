@@ -23,7 +23,7 @@ import {
 } from "@workspace/db";
 import { and, count, countDistinct, desc, eq, ilike, inArray, isNull, or, sql } from "drizzle-orm";
 import { Router, type IRouter } from "express";
-import { type AuthedRequest } from "../../lib/auth/requireAuth";
+import { actorUserId, scopedDataUserId } from "../../lib/auth/scopedUserId";
 import { currentDataMode } from "../../lib/dataMode";
 import { withUniqueRetry } from "../../lib/withUniqueRetry";
 import { getCompanySettings } from "../../lib/companySettingsCache";
@@ -80,7 +80,7 @@ async function resolvePaymentLink(
 }
 
 router.get("/receipts", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const dataMode = await currentDataMode();
   const query = ListReceiptsQueryParams.parse(req.query);
   const conditions = [eq(receiptsTable.userId, userId), eq(receiptsTable.dataMode, dataMode), isNull(receiptsTable.deletedAt)];
@@ -139,7 +139,7 @@ router.get("/receipts", async (req, res) => {
 
 // Registered before GET /receipts/:id so "stats" isn't captured as an :id.
 router.get("/receipts/stats", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const dataMode = await currentDataMode();
   const query = GetReceiptsStatsQueryParams.parse(req.query);
   const conditions = [eq(receiptsTable.userId, userId), eq(receiptsTable.dataMode, dataMode), isNull(receiptsTable.deletedAt)];
@@ -179,7 +179,7 @@ router.get("/receipts/stats", async (req, res) => {
 });
 
 router.delete("/receipts/bulk-delete", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const dataMode = await currentDataMode();
   const { ids } = BulkIdsBody.parse(req.body);
   if (ids.length === 0) { res.status(204).send(); return; }
@@ -190,7 +190,7 @@ router.delete("/receipts/bulk-delete", async (req, res) => {
     .returning({ id: receiptsTable.id });
   if (deleted.length > 0) {
     await db.insert(auditLogTable).values(
-      deleted.map((row) => ({ userId, dataMode, entityType: "receipt" as const, entityId: row.id, eventType: "deleted" as const })),
+      deleted.map((row) => ({ userId: actorUserId(req), dataMode, entityType: "receipt" as const, entityId: row.id, eventType: "deleted" as const })),
     );
   }
   res.status(204).send();
@@ -198,7 +198,7 @@ router.delete("/receipts/bulk-delete", async (req, res) => {
 
 // Registered before /receipts/:id so "deleted" isn't captured as an :id.
 router.get("/receipts/deleted", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const dataMode = await currentDataMode();
   const query = zz.object({ page: zz.coerce.number().int().min(1).optional(), pageSize: zz.coerce.number().int().min(1).max(500).optional() }).parse(req.query);
   const where = and(eq(receiptsTable.userId, userId), eq(receiptsTable.dataMode, dataMode), sql`${receiptsTable.deletedAt} IS NOT NULL`);
@@ -230,7 +230,7 @@ router.get("/receipts/deleted", async (req, res) => {
 });
 
 router.post("/receipts/quick-draft", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const dataMode = await currentDataMode();
   const [client] = await db
     .select({ id: clientsTable.id })
@@ -302,7 +302,7 @@ router.post("/receipts/quick-draft", async (req, res) => {
 });
 
 router.post("/receipts", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const dataMode = await currentDataMode();
   const body = CreateReceiptBody.parse(req.body);
   const [invoice] = await db
@@ -362,7 +362,7 @@ router.post("/receipts", async (req, res) => {
 });
 
 router.get("/receipts/:id", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const dataMode = await currentDataMode();
   const { id } = GetReceiptParams.parse(req.params);
   const [row] = await db
@@ -389,7 +389,7 @@ router.get("/receipts/:id", async (req, res) => {
 });
 
 router.get("/quotations/:id/pdf", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const dataMode = await currentDataMode();
   const { id } = GetQuotationParams.parse(req.params);
 
@@ -414,7 +414,7 @@ router.get("/quotations/:id/pdf", async (req, res) => {
 });
 
 router.get("/receipts/:id/pdf", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const dataMode = await currentDataMode();
   const { id } = GetReceiptParams.parse(req.params);
   const [row] = await db
@@ -453,7 +453,7 @@ router.get("/receipts/:id/pdf", async (req, res) => {
 });
 
 router.patch("/receipts/:id", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const dataMode = await currentDataMode();
   const { id } = UpdateReceiptParams.parse(req.params);
   const body = UpdateReceiptBody.parse(req.body);
@@ -513,7 +513,7 @@ router.patch("/receipts/:id", async (req, res) => {
 });
 
 router.post("/receipts/:id/duplicate", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const dataMode = await currentDataMode();
   const { id } = UpdateReceiptParams.parse(req.params);
   const [src] = await db
@@ -568,7 +568,7 @@ router.post("/receipts/:id/duplicate", async (req, res) => {
 });
 
 router.patch("/receipts/:id/archive", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const dataMode = await currentDataMode();
   const { id } = UpdateReceiptParams.parse(req.params);
   const tag = zz.string().optional().parse((req.body as { note?: string })?.note);
@@ -611,7 +611,7 @@ router.patch("/receipts/:id/archive", async (req, res) => {
 });
 
 router.delete("/receipts/:id", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const dataMode = await currentDataMode();
   const { id } = DeleteReceiptParams.parse(req.params);
   const [row] = await db
@@ -620,13 +620,13 @@ router.delete("/receipts/:id", async (req, res) => {
     .where(and(eq(receiptsTable.userId, userId), eq(receiptsTable.dataMode, dataMode), isNull(receiptsTable.deletedAt), eq(receiptsTable.id, id)))
     .returning({ id: receiptsTable.id });
   if (row) {
-    await logAuditEvent({ userId, dataMode, entityType: "receipt", entityId: id, eventType: "deleted" });
+    await logAuditEvent({ userId: actorUserId(req), dataMode, entityType: "receipt", entityId: id, eventType: "deleted" });
   }
   res.status(204).send();
 });
 
 router.post("/receipts/:id/restore", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const dataMode = await currentDataMode();
   const { id } = GetReceiptParams.parse(req.params);
   const [row] = await db
@@ -638,7 +638,7 @@ router.post("/receipts/:id/restore", async (req, res) => {
     res.status(404).json({ error: "Receipt not found" });
     return;
   }
-  await logAuditEvent({ userId, dataMode, entityType: "receipt", entityId: id, eventType: "restored" });
+  await logAuditEvent({ userId: actorUserId(req), dataMode, entityType: "receipt", entityId: id, eventType: "restored" });
   const [joined] = await db
     .select({ invoiceNumber: invoicesTable.invoiceNumber, clientName: clientsTable.name })
     .from(receiptsTable)

@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
-import { requireAuth, type AuthedRequest } from "../../lib/auth/requireAuth";
+import { requireAuth } from "../../lib/auth/requireAuth";
+import { scopedDataUserId } from "../../lib/auth/scopedUserId";
 import { seedForUser } from "./helpers";
 import publicRouter from "./public";
 import pdfDocumentLayoutsRouter from "./pdf-document-layouts";
@@ -22,7 +23,7 @@ router.use(publicRouter);
 router.use(requireAuth);
 
 router.use(async (req, _res, next) => {
-  await seedForUser((req as unknown as AuthedRequest).dataUserId!);
+  await seedForUser(scopedDataUserId(req));
   next();
 });
 

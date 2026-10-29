@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import { z } from "zod";
 import { and, desc, eq } from "drizzle-orm";
 import { db, proposalActivityLogTable, proposalQuestionsTable } from "@workspace/db";
-import { type AuthedRequest } from "../../lib/auth/requireAuth";
+import { actorUserId, scopedDataUserId } from "../../lib/auth/scopedUserId";
 import { getCompanySettings } from "../../lib/companySettingsCache";
 import { sendClientProposalReplyEmail } from "../../lib/proposalNotifications";
 import { loadProposalOwned } from "./helpers";
@@ -10,7 +10,7 @@ import { loadProposalOwned } from "./helpers";
 const router: IRouter = Router();
 
 router.get("/proposals/:id/activity", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
   const existing = await loadProposalOwned(userId, id);
   if (!existing) {
@@ -34,7 +34,7 @@ router.get("/proposals/:id/activity", async (req, res) => {
 });
 
 router.get("/proposals/:id/questions", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
   const existing = await loadProposalOwned(userId, id);
   if (!existing) {
@@ -61,7 +61,7 @@ router.get("/proposals/:id/questions", async (req, res) => {
 });
 
 router.post("/proposals/:id/questions/:questionId/reply", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const { id, questionId } = z.object({ id: z.string().uuid(), questionId: z.string().uuid() }).parse(req.params);
   const body = z.object({ reply: z.string().min(1).max(4000) }).parse(req.body ?? {});
   const existing = await loadProposalOwned(userId, id);
@@ -85,7 +85,7 @@ router.post("/proposals/:id/questions/:questionId/reply", async (req, res) => {
       staffReply: replyText,
       status: "answered",
       repliedAt: now,
-      repliedByUserId: userId,
+      repliedByUserId: actorUserId(req),
     })
     .where(and(eq(proposalQuestionsTable.id, questionId), eq(proposalQuestionsTable.proposalId, id)))
     .returning();

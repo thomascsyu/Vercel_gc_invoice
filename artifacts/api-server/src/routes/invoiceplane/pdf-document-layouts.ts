@@ -13,7 +13,7 @@ import {
 } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { Router, type IRouter } from "express";
-import { type AuthedRequest } from "../../lib/auth/requireAuth";
+import { scopedDataUserId } from "../../lib/auth/scopedUserId";
 import { requireAdmin } from "../../lib/auth/requireAdmin";
 import { streamInvoicePdfToBuffer } from "../../lib/invoicePdfDraw";
 import {
@@ -89,7 +89,7 @@ const PdfLayoutPreviewBody = zz.object({
 
 /** Generate a sample PDF reflecting the editor draft (does not persist). */
 router.post("/pdf-document-layouts/preview", previewRateLimiter, async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const MAX_PREVIEW_JOB_CONSULTANTS = 3;
   const body = PdfLayoutPreviewBody.parse(req.body ?? {});
   const [current] = await db.select().from(companySettingsTable);

@@ -170,9 +170,17 @@ and the UI uses `modulesApi.ts`.
 Every business row carries a `userId` foreign key (the **workspace data owner** Google `sub`, not necessarily the signed-in staff member). The auth middleware attaches both:
 
 - **`userId`** — the authenticated actor (session or API key owner), used for admin checks and attribution.
-- **`dataUserId`** — resolved from `WORKSPACE_DATA_USER_ID`, `company_settings.workspace_data_user_id`, or the oldest active admin; used for all scoped reads and writes.
+- **`dataUserId`** — resolved from `WORKSPACE_DATA_USER_ID` (ignored with an error log if it names no user), then `company_settings.workspace_data_user_id`. If neither is set, the oldest active admin is chosen **once** and written into `company_settings.workspace_data_user_id`, so the owner does not change when roles or activation change later. Used for all scoped reads and writes.
 
-All authorized staff therefore see the same live/test sandbox data. After upgrading from per-user silos, run `scripts/merge-workspace-user-data.ts --target-sub=<canonical sub>` once (with a DB backup) and set `workspace_data_user_id` in company settings.
+Audit log entries, proposal question replies (`replied_by_user_id`) and proposal creators (`created_by_user_id`) record the signed-in staff member, not the workspace owner. Client portal alerts (questions, confirmations, revision requests) are emailed to the proposal's creator, falling back to the workspace owner for older proposals.
+
+All authorized staff therefore see the same live/test sandbox data. After upgrading from per-user silos, take a DB backup and run the one-time merge (it also sets `workspace_data_user_id`):
+
+```bash
+DATABASE_URL=postgresql://... pnpm --filter @workspace/scripts run merge-workspace --target-sub=<canonical sub> --dry-run
+```
+
+The merge runs in a single transaction. Client codes and invoice/quotation/job order/receipt/proposal numbers that exist for more than one user are listed and the run aborts; re-run with `--rename-duplicates` to keep the target user's numbers and suffix the others (`ACM001-2`, …). There is no admin UI for the owner: change it with the merge script or `WORKSPACE_DATA_USER_ID`, then restart the API (each instance caches the owner for 60 s). Restoring a backup never changes the owner.
 
 ### Route ordering caveat
 
@@ -382,7 +390,7 @@ The admin area is grouped into **Admin**, **Company**, and **Email** sections, a
 | `PUBLIC_APP_URL` | recommended | Canonical public URL of the frontend, e.g. `https://gcinvoice.cc`. Used to build post-login redirects and (with `CORS_ALLOWED_ORIGINS`) to restrict credentialed browser `Origin`s. |
 | `CORS_ALLOWED_ORIGINS` | optional | Comma-separated extra browser origins allowed to call the API with cookies (e.g. `http://localhost:5173,https://www.gcinvoice.cc`). Combined with the origin derived from `PUBLIC_APP_URL`. |
 | `CORS_RESTRICT` | optional | `true` forces strict CORS checking against `PUBLIC_APP_URL` + `CORS_ALLOWED_ORIGINS`; `false` forces permissive (allow all origins). When **unset**, CORS is **strict whenever an allowlist is configured** and permissive only if none is set. |
-| `WORKSPACE_DATA_USER_ID` | optional | Google `sub` used as the shared workspace owner for all scoped business data. Overrides `company_settings.workspace_data_user_id`. |
+| `WORKSPACE_DATA_USER_ID` | optional | Google `sub` used as the shared workspace owner for all scoped business data. Overrides `company_settings.workspace_data_user_id`; ignored (with an error log) if it does not match an `invoiceplane_users.google_sub`. |
 | `PROPOSALS_ENABLED` | optional | When `false`/`0`/`no`, staff proposal routes return 404; public client preview links still work. Defaults to enabled when unset. |
 | `GOOGLE_SIGN_IN_INVITE_ONLY` | optional | If `true`/`1`/`yes`, only users who already exist in `invoiceplane_users` (matching Google `sub` or email, including pre-provisioned `pending:<email>` rows) may complete sign-in; no automatic new-user registration at login. |
 | `GOOGLE_OAUTH_HOSTED_DOMAIN` | optional | Restrict sign-in to a single Google Workspace domain (e.g. `gabriel.hk`). Users from other domains are rejected. |

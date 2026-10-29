@@ -55,7 +55,7 @@ describe(
       const app = express();
       app.use(express.json());
       app.use((req, _res, next) => {
-        Object.assign(req, { userId });
+        Object.assign(req, { userId, dataUserId: userId });
         next();
       });
       app.use((await import("./invoiceplane/invoices")).default);
