@@ -2,7 +2,7 @@ import {
   TESTIMONIAL_TEMPLATES,
   templateToTestimonial,
 } from "@/lib/proposalTestimonialTemplates";
-import type { ProposalTestimonial } from "@/lib/modulesApi";
+import type { ProposalTestimonial } from "@/lib/proposals-api";
 
 export function resolveTestimonialsFromTemplateIds(
   ids: string[] | undefined,

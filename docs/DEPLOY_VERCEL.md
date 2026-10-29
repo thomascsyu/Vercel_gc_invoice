@@ -49,6 +49,8 @@ Set these under **Settings → Environment Variables** (Production, and Preview 
 | `PUBLIC_OBJECT_SEARCH_PATHS` | yes | `/<bucket>/public` |
 | `PRIVATE_OBJECT_DIR` | yes | `/<bucket>/private` |
 | `GCS_SERVICE_ACCOUNT_JSON` | yes | Paste the whole service-account JSON key |
+| `WORKSPACE_DATA_USER_ID` | optional | Shared workspace owner Google `sub` for all business data |
+| `PROPOSALS_ENABLED` | optional | Set `false` to disable staff proposal UI/API (public links still work) |
 | `GOOGLE_OAUTH_HOSTED_DOMAIN` | optional | Restrict sign-in to one Workspace domain |
 | `GMAIL_OAUTH_REDIRECT_URI` | optional | `https://<your-domain>/api/gmail/oauth/callback` |
 | `BUSINESS_TIME_ZONE` | optional | Default `Asia/Hong_Kong`. Vercel doesn't let you set `TZ`, so use this instead |

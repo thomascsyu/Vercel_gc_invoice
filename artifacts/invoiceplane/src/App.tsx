@@ -14,7 +14,7 @@ import LoginPage from "@/pages/login";
 import QuotationPreview from "@/pages/quotation-preview";
 import InvoicePreview from "@/pages/invoice-preview";
 import ProposalPreview from "@/pages/proposal-preview";
-import ProposalsDisabled from "@/pages/proposals-disabled";
+import { ProposalBuilderGate, ProposalsListGate } from "@/pages/proposals-gate";
 
 const Dashboard = lazy(() => import("@/pages/dashboard"));
 const Clients = lazy(() => import("@/pages/clients"));
@@ -134,13 +134,13 @@ function AppRoutes() {
             <ProtectedRoute component={JobOrders} suspense />
           </Route>
           <Route path="/proposals">
-            <ProtectedRoute component={ProposalsDisabled} />
+            <ProtectedRoute component={ProposalsListGate} suspense />
           </Route>
           <Route path="/proposals/new">
-            <ProtectedRoute component={ProposalsDisabled} />
+            <ProtectedRoute component={ProposalsListGate} suspense />
           </Route>
           <Route path="/proposals/:id/build">
-            <ProtectedRoute component={ProposalsDisabled} />
+            <ProtectedRoute component={ProposalBuilderGate} suspense />
           </Route>
           <Route path="/document-layouts">
             <ProtectedRoute component={DocumentLayouts} suspense />

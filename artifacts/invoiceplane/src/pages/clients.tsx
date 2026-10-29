@@ -29,7 +29,9 @@ import { Search, Plus, MoreHorizontal, Edit, Trash2, Download, Upload, ReceiptTe
 import { SortableHeader } from "@/components/sortable-header";
 import { keepPreviousData, useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { apiMigrateClientProposal } from "@/lib/modulesApi";
+import { apiMigrateClientProposal } from "@/lib/proposals-api";
+import { useAuthSession } from "@/context/auth-session";
+import { Link } from "wouter";
 import { DeletedItemsDialog } from "@/components/deleted-items-dialog";
 import { useDebounce } from "@/hooks/use-debounce";
 import {
@@ -387,7 +389,15 @@ function DriveLinkPreview({ url }: { url: string }) {
   );
 }
 
-function ClientProposalSheet({ client, onClose }: { client: Client; onClose: () => void }) {
+function ClientProposalSheet({
+  client,
+  onClose,
+  proposalsEnabled,
+}: {
+  client: Client;
+  onClose: () => void;
+  proposalsEnabled: boolean;
+}) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const proposalKey = getGetClientProposalQueryKey(client.id);
@@ -410,7 +420,9 @@ function ClientProposalSheet({ client, onClose }: { client: Client; onClose: () 
     onSuccess: (result) => {
       toast({
         title: result.alreadyExists ? "Proposal already exists" : "Proposal migrated",
-        description: "The Proposals module is currently turned off, so the document cannot be opened here. Public client links still work.",
+        description: proposalsEnabled
+          ? "Open the Proposals module to edit and send the document."
+          : "The Proposals module is turned off; public client links still work.",
       });
       onClose();
     },
@@ -556,20 +568,27 @@ function ClientProposalSheet({ client, onClose }: { client: Client; onClose: () 
                 </div>
               ) : (
                 <p className="text-sm text-muted-foreground rounded-md border border-dashed p-4">
-                  No legacy tracker data for this client. Use Quotations for new work — staff proposal editing is turned off.
+                  No legacy tracker data for this client. Use Quotations for new work
+                  {proposalsEnabled ? ", or create a full proposal below." : "."}
                 </p>
               )}
 
               <div className="flex flex-wrap gap-2">
                 <Button
                   onClick={() => migrateMut.mutate()}
-                  disabled={migrateMut.isPending}
+                  disabled={migrateMut.isPending || !proposalsEnabled}
                 >
                   {legacy ? "Migrate to full proposal" : "Create draft proposal"}
                 </Button>
-                <p className="text-xs text-muted-foreground self-center">
-                  Staff proposal editing is turned off. Confirmed quotations and Drive links below still work.
-                </p>
+                {proposalsEnabled ? (
+                  <Button variant="outline" asChild>
+                    <Link href="/proposals">Open Proposals</Link>
+                  </Button>
+                ) : (
+                  <p className="text-xs text-muted-foreground self-center">
+                    Staff proposal editing is turned off. Confirmed quotations and Drive links still work.
+                  </p>
+                )}
               </div>
             </section>
           </div>
@@ -580,6 +599,8 @@ function ClientProposalSheet({ client, onClose }: { client: Client; onClose: () 
 }
 
 export default function Clients() {
+  const { data: session } = useAuthSession();
+  const proposalsEnabled = session?.capabilities?.proposals !== false;
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounce(search, 250);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -1114,6 +1135,7 @@ export default function Clients() {
         <ClientProposalSheet
           client={proposalClient}
           onClose={() => setProposalClient(null)}
+          proposalsEnabled={proposalsEnabled}
         />
       )}
 

@@ -19,7 +19,7 @@ const ReorderQuotationTemplatesBody = zz.object({ ids: zz.array(zz.string()) });
 // ── Quotation Templates ──────────────────────────────────────────────────────
 
 router.get("/quotation-templates", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const query = ListQuotationTemplatesQueryParams.parse(req.query);
   const search = query.q?.trim();
   const where = search
@@ -46,7 +46,7 @@ router.get("/quotation-templates", async (req, res) => {
 });
 
 router.post("/quotation-templates", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const body = CreateQuotationTemplateBody.parse(req.body);
   const [{ maxOrder }] = await db
     .select({ maxOrder: max(quotationTemplatesTable.sortOrder) })
@@ -72,7 +72,7 @@ router.post("/quotation-templates", async (req, res) => {
 });
 
 router.get("/quotation-templates/:id", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const { id } = UpdateQuotationTemplateParams.parse(req.params);
   const [row] = await db
     .select()
@@ -87,7 +87,7 @@ router.get("/quotation-templates/:id", async (req, res) => {
 });
 
 router.patch("/quotation-templates/:id", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const { id } = UpdateQuotationTemplateParams.parse(req.params);
   const body = UpdateQuotationTemplateBody.parse(req.body);
   const row = await db.transaction(async (tx) => {
@@ -120,7 +120,7 @@ router.patch("/quotation-templates/:id", async (req, res) => {
 });
 
 router.post("/quotation-templates/reorder", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const { ids } = ReorderQuotationTemplatesBody.parse(req.body);
   await Promise.all(
     ids.map((id, idx) =>
@@ -134,7 +134,7 @@ router.post("/quotation-templates/reorder", async (req, res) => {
 });
 
 router.delete("/quotation-templates/:id", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const { id } = DeleteQuotationTemplateParams.parse(req.params);
   await db
     .delete(quotationTemplatesTable)

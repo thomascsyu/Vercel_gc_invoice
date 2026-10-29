@@ -5,6 +5,8 @@ import { z } from "zod/v4";
 import { type AuthedRequest } from "../../lib/auth/requireAuth";
 import { requireAdmin } from "../../lib/auth/requireAdmin";
 import { getCompanySettings } from "../../lib/companySettingsCache";
+import { proposalsEnabled } from "../../lib/featureFlags";
+import { resolveWorkspaceDataUserId } from "../../lib/workspaceScope";
 import { isForeignKeyViolation } from "../../lib/pgErrors";
 
 const router: IRouter = Router();
@@ -12,7 +14,7 @@ const router: IRouter = Router();
 // ---------- /me ----------
 router.get("/me", async (req, res) => {
   const areq = req as AuthedRequest;
-  const [row, settings] = await Promise.all([
+  const [row, settings, dataUserId] = await Promise.all([
     db
       .select()
       .from(usersTable)
@@ -20,10 +22,18 @@ router.get("/me", async (req, res) => {
       .limit(1)
       .then((rows) => rows[0]),
     getCompanySettings(),
+    resolveWorkspaceDataUserId(),
   ]);
   const testModeEnabled = settings?.testModeEnabled ?? false;
+  const capabilities = { proposals: proposalsEnabled() };
   if (!row) {
-    res.json({ userId: areq.userId, role: areq.role, testModeEnabled });
+    res.json({
+      userId: areq.userId,
+      role: areq.role,
+      testModeEnabled,
+      dataUserId,
+      capabilities,
+    });
     return;
   }
   res.json({
@@ -32,6 +42,8 @@ router.get("/me", async (req, res) => {
     email: row.email,
     fullName: row.fullName ?? undefined,
     testModeEnabled,
+    dataUserId,
+    capabilities,
   });
 });
 

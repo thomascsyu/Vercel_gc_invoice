@@ -10,7 +10,6 @@ import {
   apiDeleteJobOrder,
   apiEmailJobOrderToConsultant,
   apiExtractJobOrderFromProposal,
-  apiExtractProposalForJobOrder,
   apiJobOrderFromInvoice,
   apiJobOrderFromQuotation,
   apiListJobOrders,
@@ -23,6 +22,7 @@ import {
   type LineItem,
   type ProposalExtractionResult,
 } from "@/lib/modulesApi";
+import { apiExtractProposalForJobOrder } from "@/lib/proposals-api";
 import {
   useListQuotations,
   useListInvoices,

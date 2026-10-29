@@ -67,7 +67,7 @@ proposals into job orders.
 - **PDF document layouts** — section positions use PDF points (±120 pt per axis); saved settings live in company settings (`pdf_document_layouts`). Applies to invoices, quotations, receipts, and job orders — **not proposals** (proposals use a fixed layout in `proposalPdfDraw.ts`). Older layouts stored only a vertical nudge are treated as `{ x: 0, y: n }` when rendering
 - **Public share links** for quotations (revocable tokens) and **proposals** (expiring share tokens tied to validity); proposal portal logs client views, downloads, and questions
 - **Scheduled background jobs** (node-cron) — e.g. daily quotation expiry reminders (run a **single** API instance, or duplicate sends are possible)
-- **Per-user data isolation** — every row is scoped by authenticated user ID
+- **Shared workspace data** — business records are scoped to one workspace owner Google sub (`dataUserId`); all authorized staff share the same clients, invoices, and quotations (see [Per-user data scoping](#per-user-data-scoping))
 
 ---
 
@@ -167,10 +167,12 @@ and the UI uses `modulesApi.ts`.
 
 ### Per-user data scoping
 
-Every business row carries a `userId` foreign key. The auth middleware
-attaches the authenticated Google `sub` (from the signed session cookie)
-to the request, and every query is filtered by it — there is no cross-user
-visibility.
+Every business row carries a `userId` foreign key (the **workspace data owner** Google `sub`, not necessarily the signed-in staff member). The auth middleware attaches both:
+
+- **`userId`** — the authenticated actor (session or API key owner), used for admin checks and attribution.
+- **`dataUserId`** — resolved from `WORKSPACE_DATA_USER_ID`, `company_settings.workspace_data_user_id`, or the oldest active admin; used for all scoped reads and writes.
+
+All authorized staff therefore see the same live/test sandbox data. After upgrading from per-user silos, run `scripts/merge-workspace-user-data.ts --target-sub=<canonical sub>` once (with a DB backup) and set `workspace_data_user_id` in company settings.
 
 ### Route ordering caveat
 
@@ -380,6 +382,8 @@ The admin area is grouped into **Admin**, **Company**, and **Email** sections, a
 | `PUBLIC_APP_URL` | recommended | Canonical public URL of the frontend, e.g. `https://gcinvoice.cc`. Used to build post-login redirects and (with `CORS_ALLOWED_ORIGINS`) to restrict credentialed browser `Origin`s. |
 | `CORS_ALLOWED_ORIGINS` | optional | Comma-separated extra browser origins allowed to call the API with cookies (e.g. `http://localhost:5173,https://www.gcinvoice.cc`). Combined with the origin derived from `PUBLIC_APP_URL`. |
 | `CORS_RESTRICT` | optional | `true` forces strict CORS checking against `PUBLIC_APP_URL` + `CORS_ALLOWED_ORIGINS`; `false` forces permissive (allow all origins). When **unset**, CORS is **strict whenever an allowlist is configured** and permissive only if none is set. |
+| `WORKSPACE_DATA_USER_ID` | optional | Google `sub` used as the shared workspace owner for all scoped business data. Overrides `company_settings.workspace_data_user_id`. |
+| `PROPOSALS_ENABLED` | optional | When `false`/`0`/`no`, staff proposal routes return 404; public client preview links still work. Defaults to enabled when unset. |
 | `GOOGLE_SIGN_IN_INVITE_ONLY` | optional | If `true`/`1`/`yes`, only users who already exist in `invoiceplane_users` (matching Google `sub` or email, including pre-provisioned `pending:<email>` rows) may complete sign-in; no automatic new-user registration at login. |
 | `GOOGLE_OAUTH_HOSTED_DOMAIN` | optional | Restrict sign-in to a single Google Workspace domain (e.g. `gabriel.hk`). Users from other domains are rejected. |
 | `QUOTATION_REMINDER_DAYS` | optional | Days before expiry to send reminder email (default `3`; must be ≥ 1) |

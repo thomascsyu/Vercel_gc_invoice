@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { ArrowLeft, ArrowRight, Check, Plus, Trash2, X } from "lucide-react";
-import type { Client } from "@workspace/api-client-react";
+import type { Client, Currency } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -37,7 +37,7 @@ import {
   type ProposalSetupTemplateId,
   type ProposalSetupTemplates,
   type ProposalTestimonial,
-} from "@/lib/modulesApi";
+} from "@/lib/proposals-api";
 import { ISO_STANDARD_OPTIONS } from "@/lib/proposal-shared";
 
 const WIZARD_STEPS = [
@@ -225,7 +225,7 @@ export function GuidedProposalWizard({
         clientId,
         isoStandards: isoStandards.split(",").map((s) => s.trim()).filter(Boolean),
         totalAmount,
-        currency,
+        currency: currency as Currency,
         proposalScope: proposalScope.trim() || undefined,
         certificationLocations: certificationLocations
           .map((loc) => ({ address: loc.address.trim(), staffCount: loc.staffCount || 0 }))

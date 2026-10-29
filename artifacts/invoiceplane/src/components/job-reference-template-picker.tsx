@@ -2,7 +2,7 @@ import { Plus } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import type { ProposalJobReference } from "@/lib/modulesApi";
+import type { ProposalJobReference } from "@/lib/proposals-api";
 import {
   JOB_REFERENCE_TEMPLATES,
   jobReferenceMatchesTemplate,

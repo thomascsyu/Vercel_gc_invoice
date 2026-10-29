@@ -93,7 +93,7 @@ const InvoicesListQuery = ListInvoicesQueryParams.extend({
   overdue: zz.enum(["true", "1"]).optional(),
 });
 router.get("/invoices", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const dataMode = await currentDataMode();
   const query = InvoicesListQuery.parse(req.query);
   const conditions = [eq(invoicesTable.userId, userId), eq(invoicesTable.dataMode, dataMode), isNull(invoicesTable.deletedAt)];
@@ -165,13 +165,13 @@ router.get("/invoices", async (req, res) => {
 
 // Preview only: the unique index resolves concurrent saves of the same number.
 router.get("/invoices/next-number", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   res.setHeader("Cache-Control", "no-store");
   res.json({ invoiceNumber: await nextDocumentNumber(userId, "invoice") });
 });
 
 router.get("/invoices/number-availability", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const { invoiceNumber } = zz.object({ invoiceNumber: zz.string().trim().min(1) }).parse(req.query);
   res.setHeader("Cache-Control", "no-store");
   res.json({ available: !await isInvoiceNumberInUse(userId, invoiceNumber) });
@@ -179,7 +179,7 @@ router.get("/invoices/number-availability", async (req, res) => {
 
 // Registered before /invoices/:id so "deleted" isn't captured as an :id.
 router.get("/invoices/deleted", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const dataMode = await currentDataMode();
   const query = zz.object({ page: zz.coerce.number().int().min(1).optional(), pageSize: zz.coerce.number().int().min(1).max(500).optional() }).parse(req.query);
   const where = and(eq(invoicesTable.userId, userId), eq(invoicesTable.dataMode, dataMode), sql`${invoicesTable.deletedAt} IS NOT NULL`);
@@ -212,7 +212,7 @@ router.get("/invoices/deleted", async (req, res) => {
 // Registered before /invoices/:id so "continuity" isn't captured as an :id.
 // Includes soft-deleted rows (voided) but not permanently purged invoices.
 router.get("/invoices/continuity", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const dataMode = await currentDataMode();
   const rows = await db
     .select({
@@ -392,7 +392,7 @@ function parseInvoiceItemsColumn(raw: string | undefined): LineItem[] | null {
 }
 
 router.get("/invoices/export", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const dataMode = await currentDataMode();
   const [rows, allConsultants] = await Promise.all([
     db
@@ -535,7 +535,7 @@ type InvoiceImportRowState = {
 router.post("/invoices/import", handleCsvImportUpload, async (req, res) => {
   if (!req.file) { res.status(400).json({ error: "No file uploaded" }); return; }
   try {
-    const userId = (req as unknown as AuthedRequest).userId;
+    const userId = (req as unknown as AuthedRequest).dataUserId!;
     const dataMode = await currentDataMode();
     const commit = req.query.commit === "true";
     const rawRecords: Record<string, string>[] = csvParse(req.file.buffer, { columns: true, skip_empty_lines: true, trim: true });
@@ -765,7 +765,7 @@ router.post("/invoices/import", handleCsvImportUpload, async (req, res) => {
 });
 
 router.post("/invoices", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const dataMode = await currentDataMode();
   const body = CreateInvoiceBody.parse(req.body);
   const clientCheck = await assertClientOwnedByUser(userId, body.clientId, dataMode);
@@ -852,7 +852,7 @@ router.post("/invoices", async (req, res) => {
 
 /** Single-line draft for empty workspace (first client required). */
 router.post("/invoices/quick-draft", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const dataMode = await currentDataMode();
   const [client] = await db
     .select({ id: clientsTable.id })
@@ -893,7 +893,7 @@ router.post("/invoices/quick-draft", async (req, res) => {
 });
 
 router.get("/invoices/:id", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const dataMode = await currentDataMode();
   const { id } = GetInvoiceParams.parse(req.params);
   const [row] = await db
@@ -911,7 +911,7 @@ router.get("/invoices/:id", async (req, res) => {
 });
 
 router.delete("/invoices/bulk-delete", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const dataMode = await currentDataMode();
   const { ids } = BulkIdsBody.parse(req.body);
   if (ids.length === 0) { res.status(204).send(); return; }
@@ -955,7 +955,7 @@ router.delete("/invoices/bulk-delete", async (req, res) => {
 });
 
 router.patch("/invoices/bulk-status", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const dataMode = await currentDataMode();
   const { ids, status } = InvoiceBulkStatusBody.parse(req.body);
   if (ids.length === 0) { res.status(204).send(); return; }
@@ -1057,7 +1057,7 @@ const InvoiceStatusBody = zz.object({
 });
 /** Status-only update — avoids round-tripping full line items from list rows. */
 router.patch("/invoices/:id/status", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const dataMode = await currentDataMode();
   const { id } = UpdateInvoiceParams.parse(req.params);
   const body = InvoiceStatusBody.parse(req.body);
@@ -1126,7 +1126,7 @@ router.patch("/invoices/:id/status", async (req, res) => {
 });
 
 router.patch("/invoices/:id/archive", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const dataMode = await currentDataMode();
   const { id } = UpdateInvoiceParams.parse(req.params);
   const reason = zz.string().optional().parse((req.body as { cancellationReason?: string })?.cancellationReason);
@@ -1184,7 +1184,7 @@ router.patch("/invoices/:id/archive", async (req, res) => {
 });
 
 router.post("/invoices/:id/duplicate", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const dataMode = await currentDataMode();
   const { id } = UpdateInvoiceParams.parse(req.params);
   const [src] = await db
@@ -1230,7 +1230,7 @@ router.post("/invoices/:id/duplicate", async (req, res) => {
 });
 
 router.patch("/invoices/:id", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const dataMode = await currentDataMode();
   const { id } = UpdateInvoiceParams.parse(req.params);
   const body = UpdateInvoiceBody.parse(req.body);
@@ -1382,7 +1382,7 @@ router.patch("/invoices/:id", async (req, res) => {
 });
 
 router.delete("/invoices/:id", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const dataMode = await currentDataMode();
   const { id } = DeleteInvoiceParams.parse(req.params);
   await db.transaction(async (tx) => {
@@ -1419,7 +1419,7 @@ router.delete("/invoices/:id", async (req, res) => {
 // stay deleted and must be restored separately from their own "Deleted" view.
 // Status is left as stored (a restored paid invoice can still be sent to draft).
 router.post("/invoices/:id/restore", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const dataMode = await currentDataMode();
   const { id } = GetInvoiceParams.parse(req.params);
   const [row] = await db
@@ -1442,7 +1442,7 @@ router.post("/invoices/:id/restore", async (req, res) => {
 // from the trash view, so a live (non-deleted) invoice can't be purged by
 // mistake -- it must be soft-deleted first.
 router.delete("/invoices/:id/permanent", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const dataMode = await currentDataMode();
   const { id } = GetInvoiceParams.parse(req.params);
   const [row] = await db
@@ -1465,7 +1465,7 @@ router.delete("/invoices/:id/permanent", async (req, res) => {
 });
 
 router.get("/invoices/:id/pdf", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const dataMode = await currentDataMode();
   const { id } = GetInvoiceParams.parse(req.params);
   const [row] = await db

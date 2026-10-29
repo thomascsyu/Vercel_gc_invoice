@@ -185,7 +185,7 @@ function toAuditDateString(value: string | Date): string {
 }
 
 router.get("/clients/:id/certifications", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const dataMode = await currentDataMode();
   const { id } = GetClientCertificationsParams.parse(req.params);
   if (!(await assertActiveClient(userId, dataMode, id))) {
@@ -196,7 +196,7 @@ router.get("/clients/:id/certifications", async (req, res) => {
 });
 
 router.post("/clients/:id/certifications", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const dataMode = await currentDataMode();
   const { id } = CreateClientCertificationParams.parse(req.params);
   const body = CreateClientCertificationBody.parse(req.body);
@@ -218,7 +218,7 @@ router.post("/clients/:id/certifications", async (req, res) => {
 });
 
 router.put("/clients/:id/certifications", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const dataMode = await currentDataMode();
   const { id } = ReplaceClientCertificationsParams.parse(req.params);
   const body = ReplaceClientCertificationsBody.parse(req.body);
@@ -267,7 +267,7 @@ router.put("/clients/:id/certifications", async (req, res) => {
 });
 
 router.patch("/clients/:id/certifications/:certId", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const dataMode = await currentDataMode();
   const { id, certId } = UpdateClientCertificationParams.parse(req.params);
   const body = UpdateClientCertificationBody.parse(req.body);
@@ -289,7 +289,7 @@ router.patch("/clients/:id/certifications/:certId", async (req, res) => {
 });
 
 router.delete("/clients/:id/certifications/:certId", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const dataMode = await currentDataMode();
   const { id, certId } = DeleteClientCertificationParams.parse(req.params);
   const cert = await loadCertification(userId, dataMode, id, certId);
@@ -302,7 +302,7 @@ router.delete("/clients/:id/certifications/:certId", async (req, res) => {
 });
 
 router.post("/clients/:id/certifications/:certId/audits", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const dataMode = await currentDataMode();
   const { id, certId } = CreateClientCertificationAuditParams.parse(req.params);
   const body = CreateClientCertificationAuditBody.parse(req.body);
@@ -324,7 +324,7 @@ router.post("/clients/:id/certifications/:certId/audits", async (req, res) => {
 });
 
 router.patch("/clients/:id/certifications/:certId/audits/:auditId", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const dataMode = await currentDataMode();
   const { id, certId, auditId } = UpdateClientCertificationAuditParams.parse(req.params);
   const body = UpdateClientCertificationAuditBody.parse(req.body);
@@ -359,7 +359,7 @@ router.patch("/clients/:id/certifications/:certId/audits/:auditId", async (req, 
 });
 
 router.delete("/clients/:id/certifications/:certId/audits/:auditId", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const dataMode = await currentDataMode();
   const { id, certId, auditId } = DeleteClientCertificationAuditParams.parse(req.params);
   const cert = await loadCertification(userId, dataMode, id, certId);

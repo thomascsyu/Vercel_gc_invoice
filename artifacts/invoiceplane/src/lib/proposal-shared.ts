@@ -1,4 +1,4 @@
-import type { ProposalActivity, ProposalDocument, ProposalPhase, ProposalStatus } from "@/lib/modulesApi";
+import type { ProposalActivity, ProposalDocument, ProposalPhase, ProposalStatus } from "@/lib/proposals-api";
 
 export const DEFAULT_PHASES: ProposalPhase[] = [
   {

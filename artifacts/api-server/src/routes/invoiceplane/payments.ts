@@ -41,7 +41,7 @@ import { contentDispositionAttachment, isAllowedPaymentReceiptMime } from "../..
 const router: IRouter = Router();
 
 router.get("/payments", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const dataMode = await currentDataMode();
   const query = ListPaymentsQueryParams.parse(req.query);
   const conditions: SQL<unknown>[] = [eq(paymentsTable.userId, userId), eq(paymentsTable.dataMode, dataMode), isNull(paymentsTable.deletedAt)];
@@ -134,7 +134,7 @@ router.get("/payments", async (req, res) => {
 });
 
 router.get("/payments/export", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const dataMode = await currentDataMode();
   const rows = await db
     .select({ payment: paymentsTable, invoiceNumber: invoicesTable.invoiceNumber })
@@ -162,7 +162,7 @@ router.get("/payments/export", async (req, res) => {
 router.post("/payments/import", handleCsvImportUpload, async (req, res) => {
   if (!req.file) { res.status(400).json({ error: "No file uploaded" }); return; }
   try {
-    const userId = (req as unknown as AuthedRequest).userId;
+    const userId = (req as unknown as AuthedRequest).dataUserId!;
     const dataMode = await currentDataMode();
     const commit = req.query.commit === "true";
     const records: Record<string, string>[] = csvParse(req.file.buffer, { columns: true, skip_empty_lines: true, trim: true });
@@ -284,7 +284,7 @@ router.post("/payments/import", handleCsvImportUpload, async (req, res) => {
 });
 
 router.post("/payments", async (req, res, next) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const dataMode = await currentDataMode();
   const body = CreatePaymentBody.parse(req.body);
 
@@ -379,7 +379,7 @@ router.post("/payments", async (req, res, next) => {
 });
 
 router.delete("/payments/:id", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const dataMode = await currentDataMode();
   const { id } = DeletePaymentParams.parse(req.params);
   const [payment] = await db
@@ -403,7 +403,7 @@ router.delete("/payments/:id", async (req, res) => {
 });
 
 router.post("/payments/:id/restore", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const dataMode = await currentDataMode();
   const { id } = zz.object({ id: zz.string().uuid() }).parse(req.params);
   const row = await db.transaction(async (tx) => {
@@ -429,7 +429,7 @@ router.post("/payments/:id/restore", async (req, res) => {
 });
 
 router.get("/payments/deleted", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const dataMode = await currentDataMode();
   const query = zz.object({ page: zz.coerce.number().int().min(1).optional(), pageSize: zz.coerce.number().int().min(1).max(500).optional() }).parse(req.query);
   const where = and(eq(paymentsTable.userId, userId), eq(paymentsTable.dataMode, dataMode), sql`${paymentsTable.deletedAt} IS NOT NULL`);
@@ -459,7 +459,7 @@ router.get("/payments/deleted", async (req, res) => {
 });
 
 router.post("/payments/:id/receipt", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const dataMode = await currentDataMode();
   const { id } = GenerateReceiptFromPaymentParams.parse(req.params);
   const [joined] = await db
@@ -517,7 +517,7 @@ router.post("/payments/:id/receipt", async (req, res) => {
 
 // Payment Receipts Routes
 router.get("/payments/:id/receipts", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const dataMode = await currentDataMode();
   const { id } = zz.object({ id: zz.string().uuid() }).parse(req.params);
   const [payment] = await db
@@ -537,7 +537,7 @@ router.get("/payments/:id/receipts", async (req, res) => {
 });
 
 router.post("/payments/:id/receipts", receiptUpload.single("file"), async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const dataMode = await currentDataMode();
   const { id } = zz.object({ id: zz.string().uuid() }).parse(req.params);
   if (!req.file) {
@@ -605,7 +605,7 @@ router.post("/payments/:id/receipts", receiptUpload.single("file"), async (req, 
 });
 
 router.get("/payments/:paymentId/receipts/:receiptId", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const dataMode = await currentDataMode();
   const { paymentId, receiptId } = zz.object({ paymentId: zz.string().uuid(), receiptId: zz.string().uuid() }).parse(req.params);
   const [receipt] = await db
@@ -627,7 +627,7 @@ router.get("/payments/:paymentId/receipts/:receiptId", async (req, res) => {
 });
 
 router.delete("/payments/:paymentId/receipts/:receiptId", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const dataMode = await currentDataMode();
   const { paymentId, receiptId } = zz.object({ paymentId: zz.string().uuid(), receiptId: zz.string().uuid() }).parse(req.params);
   const [receipt] = await db
@@ -669,7 +669,7 @@ router.delete("/payments/:paymentId/receipts/:receiptId", async (req, res) => {
 });
 
 router.get("/payments/:paymentId/receipts/:receiptId/download", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const dataMode = await currentDataMode();
   const { paymentId, receiptId } = zz.object({ paymentId: zz.string().uuid(), receiptId: zz.string().uuid() }).parse(req.params);
   const [receipt] = await db

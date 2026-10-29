@@ -9,7 +9,7 @@ import {
   type ProposalSetupTemplate,
   type ProposalSetupTemplateId,
   type ProposalSetupTemplates,
-} from "@/lib/modulesApi";
+} from "@/lib/proposals-api";
 import { JOB_REFERENCE_TEMPLATES } from "@/lib/proposalJobReferenceTemplates";
 import { TESTIMONIAL_TEMPLATES } from "@/lib/proposalTestimonialTemplates";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -37,44 +37,28 @@ function renumberPhases(phases: ProposalPhase[]): ProposalPhase[] {
   return phases.map((row, i) => ({ ...row, phase: i + 1 }));
 }
 
+function cloneOneTemplate(template: ProposalSetupTemplate): ProposalSetupTemplate {
+  return {
+    ...template,
+    isoStandards: [...template.isoStandards],
+    scopePhases: template.scopePhases.map((p) => ({ ...p })),
+    paymentSchedule: template.paymentSchedule.map((p) => ({ ...p })),
+    jobReferenceTemplateIds: template.jobReferenceTemplateIds
+      ? [...template.jobReferenceTemplateIds]
+      : undefined,
+    testimonialTemplateIds: template.testimonialTemplateIds
+      ? [...template.testimonialTemplateIds]
+      : undefined,
+  };
+}
+
 function cloneTemplates(templates: ProposalSetupTemplates): ProposalSetupTemplates {
   return {
-    iso9001: {
-      ...templates.iso9001,
-      isoStandards: [...templates.iso9001.isoStandards],
-      scopePhases: templates.iso9001.scopePhases.map((p) => ({ ...p })),
-      paymentSchedule: templates.iso9001.paymentSchedule.map((p) => ({ ...p })),
-      jobReferenceTemplateIds: templates.iso9001.jobReferenceTemplateIds
-        ? [...templates.iso9001.jobReferenceTemplateIds]
-        : undefined,
-      testimonialTemplateIds: templates.iso9001.testimonialTemplateIds
-        ? [...templates.iso9001.testimonialTemplateIds]
-        : undefined,
-    },
-    "iso14001-45001": {
-      ...templates["iso14001-45001"],
-      isoStandards: [...templates["iso14001-45001"].isoStandards],
-      scopePhases: templates["iso14001-45001"].scopePhases.map((p) => ({ ...p })),
-      paymentSchedule: templates["iso14001-45001"].paymentSchedule.map((p) => ({ ...p })),
-      jobReferenceTemplateIds: templates["iso14001-45001"].jobReferenceTemplateIds
-        ? [...templates["iso14001-45001"].jobReferenceTemplateIds]
-        : undefined,
-      testimonialTemplateIds: templates["iso14001-45001"].testimonialTemplateIds
-        ? [...templates["iso14001-45001"].testimonialTemplateIds]
-        : undefined,
-    },
-    iso27001: {
-      ...templates.iso27001,
-      isoStandards: [...templates.iso27001.isoStandards],
-      scopePhases: templates.iso27001.scopePhases.map((p) => ({ ...p })),
-      paymentSchedule: templates.iso27001.paymentSchedule.map((p) => ({ ...p })),
-      jobReferenceTemplateIds: templates.iso27001.jobReferenceTemplateIds
-        ? [...templates.iso27001.jobReferenceTemplateIds]
-        : undefined,
-      testimonialTemplateIds: templates.iso27001.testimonialTemplateIds
-        ? [...templates.iso27001.testimonialTemplateIds]
-        : undefined,
-    },
+    iso9001: templates.iso9001 ? cloneOneTemplate(templates.iso9001) : undefined,
+    "iso14001-45001": templates["iso14001-45001"]
+      ? cloneOneTemplate(templates["iso14001-45001"])
+      : undefined,
+    iso27001: templates.iso27001 ? cloneOneTemplate(templates.iso27001) : undefined,
   };
 }
 
@@ -395,11 +379,13 @@ export function ProposalSetupTemplatesPanel({ canEdit }: ProposalSetupTemplatesP
   const saveMut = useMutation({
     mutationFn: () => {
       if (!draft) throw new Error("No template draft");
-      return apiUpdateProposalSetupTemplates({ [activeTab]: draft[activeTab] });
+      const tabDraft = draft[activeTab];
+      if (!tabDraft) throw new Error("Active template is missing");
+      return apiUpdateProposalSetupTemplates({ [activeTab]: tabDraft });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["proposal-setup-templates"] });
-      toast({ title: "Template saved", description: `${draft?.[activeTab].label ?? "Template"} updated.` });
+      toast({ title: "Template saved", description: `${draft?.[activeTab]?.label ?? "Template"} updated.` });
     },
     onError: (e: Error) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
   });
@@ -480,12 +466,18 @@ export function ProposalSetupTemplatesPanel({ canEdit }: ProposalSetupTemplatesP
 
           {TEMPLATE_TABS.map((tab) => (
             <TabsContent key={tab.id} value={tab.id} className="mt-4">
-              <TemplateEditor
-                templateId={tab.id}
-                template={draft[tab.id]}
-                canEdit={canEdit}
-                onChange={(next) => setDraft((current) => (current ? { ...current, [tab.id]: next } : current))}
-              />
+              {draft[tab.id] ? (
+                <TemplateEditor
+                  templateId={tab.id}
+                  template={draft[tab.id]!}
+                  canEdit={canEdit}
+                  onChange={(next) =>
+                    setDraft((current) => (current ? { ...current, [tab.id]: next } : current))
+                  }
+                />
+              ) : (
+                <p className="text-sm text-muted-foreground">This template is not configured yet.</p>
+              )}
             </TabsContent>
           ))}
         </Tabs>

@@ -151,7 +151,7 @@ async function nextProposalNo(userId: string): Promise<string> {
 }
 
 router.get("/proposals", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const query = z
     .object({
       page: z.coerce.number().int().min(1).default(1),
@@ -209,7 +209,7 @@ router.get("/proposals", async (req, res) => {
 });
 
 router.post("/proposals", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const parsed = ProposalBodySchema.safeParse(stripNulls(req.body ?? {}));
   if (!parsed.success) {
     const issues = parsed.error.issues.map((issue) => issue.message);
@@ -319,7 +319,7 @@ router.post("/proposals", async (req, res) => {
 });
 
 router.get("/proposals/:id", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
   const row = await loadProposalOwned(userId, id);
   if (!row) {
@@ -330,7 +330,7 @@ router.get("/proposals/:id", async (req, res) => {
 });
 
 router.patch("/proposals/:id", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
   const parsed = ProposalBodySchema.partial().safeParse(stripNulls(req.body ?? {}));
   if (!parsed.success) {
@@ -433,7 +433,7 @@ router.patch("/proposals/:id", async (req, res) => {
 });
 
 router.delete("/proposals/:id", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
   const existing = await loadProposalOwned(userId, id);
   if (!existing) {

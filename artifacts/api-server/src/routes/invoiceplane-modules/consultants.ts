@@ -45,7 +45,7 @@ router.get("/consultants", async (_req, res) => {
 
 /** Monthly invoiced revenue attributed to each consultant. */
 router.get("/consultants/performance", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const dataMode = await currentDataMode();
   const rows = await db
     .select({
