@@ -15,7 +15,11 @@ async function buildAll() {
   await rm(distDir, { recursive: true, force: true });
 
   await esbuild({
-    entryPoints: [path.resolve(artifactDir, "src/index.ts")],
+    // index: long-lived server (Docker/VM). vercel: Vercel Function handler.
+    // migrate: one-shot migration runner used by the Vercel build.
+    entryPoints: ["index", "vercel", "migrate"].map((name) =>
+      path.resolve(artifactDir, `src/${name}.ts`),
+    ),
     platform: "node",
     bundle: true,
     format: "esm",

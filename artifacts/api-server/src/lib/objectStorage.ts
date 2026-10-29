@@ -44,6 +44,14 @@ function getObjectStorageClient(): Storage {
     });
   }
 
+  // Hosts without a filesystem for a key file (Vercel) pass the service
+  // account JSON itself in GCS_SERVICE_ACCOUNT_JSON.
+  const inlineCredentials = process.env["GCS_SERVICE_ACCOUNT_JSON"]?.trim();
+  if (inlineCredentials) {
+    const credentials = JSON.parse(inlineCredentials) as { project_id?: string };
+    return new Storage({ credentials, projectId: credentials.project_id });
+  }
+
   // Default to Google ADC (service account JSON via GOOGLE_APPLICATION_CREDENTIALS,
   // GKE/GCE metadata, workload identity, etc.). This is the expected mode for
   // Docker on an Ubuntu VM, or any host with Application Default Credentials.

@@ -448,7 +448,11 @@ router.post("/clients/import", handleCsvImportUpload, async (req, res) => {
     }
     // Valid rows import: commit saves accepted rows only; invalid rows were skipped at parse time.
 
-    const asyncMode = typeof req.query.async === "string" && req.query.async === "true";
+    // Job state lives in this process's memory. On Vercel the status poll can
+    // land on another instance (and work after the response may be frozen),
+    // so import synchronously there; the client accepts either response shape.
+    const asyncMode =
+      !process.env["VERCEL"] && typeof req.query.async === "string" && req.query.async === "true";
     if (asyncMode) {
       const jobId = randomUUID();
       const total = accepted.length;

@@ -1,4 +1,5 @@
 import { resolveDatabaseUrl } from "@workspace/db/database-url";
+import { existsSync } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import pg from "pg";
@@ -6,9 +7,14 @@ import { logger } from "../logger";
 import { HEAL_DUPLICATE_CLIENT_CODES_SQL } from "./healDuplicateClientCodes";
 
 function migrationsDir(): string {
+  const explicit = process.env["MIGRATIONS_DIR"]?.trim();
+  if (explicit) return path.resolve(explicit);
   // In Docker, WORKDIR is `/app/artifacts/api-server`, so this resolves to `/app/lib/db/migrations`.
   // In local dev, running from the same folder also works.
-  return path.resolve(process.cwd(), "../../lib/db/migrations");
+  const fromApiServer = path.resolve(process.cwd(), "../../lib/db/migrations");
+  // Vercel Functions (and scripts run from the repo root) use the repo root as cwd.
+  const fromRepoRoot = path.resolve(process.cwd(), "lib/db/migrations");
+  return existsSync(fromApiServer) ? fromApiServer : fromRepoRoot;
 }
 
 async function listMigrationFiles(dir: string): Promise<string[]> {

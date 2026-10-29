@@ -7,6 +7,11 @@ const { Pool } = pg;
 
 const databaseUrl = resolveDatabaseUrl();
 
+// Each Vercel Function instance gets its own pool, and many instances can run
+// at once, so keep per-instance pools small and release idle clients quickly.
+// Point DATABASE_URL at a pooled endpoint (PgBouncer / Neon / Supabase pooler).
+const isServerless = Boolean(process.env.VERCEL);
+
 /**
  * Shared pg pool for Drizzle. Tuned for managed Postgres (ApsaraDB RDS and
  * similar) where restarts and idle-connection cleanup emit SQLSTATE 57P01
@@ -14,8 +19,8 @@ const databaseUrl = resolveDatabaseUrl();
  */
 export const pool = new Pool({
   connectionString: databaseUrl,
-  max: Number(process.env.PG_POOL_MAX ?? 20),
-  idleTimeoutMillis: Number(process.env.PG_POOL_IDLE_TIMEOUT_MS ?? 30_000),
+  max: Number(process.env.PG_POOL_MAX ?? (isServerless ? 5 : 20)),
+  idleTimeoutMillis: Number(process.env.PG_POOL_IDLE_TIMEOUT_MS ?? (isServerless ? 5_000 : 30_000)),
   connectionTimeoutMillis: Number(process.env.PG_POOL_CONNECT_TIMEOUT_MS ?? 5_000),
   // Detect dead TCP peers before checkout; helps after DB pod restarts.
   keepAlive: process.env.PG_POOL_KEEPALIVE !== "false",
