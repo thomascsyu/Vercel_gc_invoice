@@ -14,7 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { apiUrl } from "@/lib/api-base";
 import { sharePreviewUrl } from "@/lib/proposal-shared";
-import type { ProposalDocument } from "@/lib/modulesApi";
+import type { ProposalDocument } from "@/lib/proposals-api";
 
 type ProposalWorkflowToolbarProps = {
   proposal: ProposalDocument;

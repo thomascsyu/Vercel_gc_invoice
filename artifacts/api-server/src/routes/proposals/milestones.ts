@@ -58,7 +58,7 @@ async function nextJobOrderNumber(userId: string, executor: Pick<typeof db, "sel
 }
 
 router.post("/proposals/:id/job-order", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
   const body = z.object({ consultantIds: z.array(z.string().uuid()).max(3).optional() }).parse(req.body ?? {});
   const existing = await loadProposalOwned(userId, id);
@@ -148,7 +148,7 @@ router.post("/proposals/:id/job-order", async (req, res) => {
 });
 
 router.post("/proposals/:id/milestones/:index/invoice", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const { id, index } = z
     .object({ id: z.string().uuid(), index: z.coerce.number().int().min(0) })
     .parse({ ...req.params, index: req.params.index });
@@ -182,7 +182,7 @@ router.post("/proposals/:id/milestones/:index/invoice", async (req, res) => {
 });
 
 router.post("/proposals/:id/milestones/invoice-all", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
   const existing = await loadProposalOwned(userId, id);
   if (!existing) {
@@ -206,7 +206,7 @@ router.post("/proposals/:id/milestones/invoice-all", async (req, res) => {
 });
 
 router.post("/proposals/:id/extract-for-job-order", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
   const existing = await loadProposalOwned(userId, id);
   if (!existing) {

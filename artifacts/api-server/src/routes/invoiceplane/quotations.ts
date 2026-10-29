@@ -119,7 +119,7 @@ const QuotationStatusBody = zz.object({
 });
 
 router.get("/quotations", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const dataMode = await currentDataMode();
   const query = ListQuotationsQueryParams.parse(req.query);
   const conditions = [eq(quotationsTable.userId, userId), eq(quotationsTable.dataMode, dataMode), isNull(quotationsTable.deletedAt)];
@@ -191,7 +191,7 @@ router.get("/quotations", async (req, res) => {
 
 // Registered before /quotations/:id so "deleted" isn't captured as an :id.
 router.get("/quotations/deleted", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const dataMode = await currentDataMode();
   const query = zz.object({ page: zz.coerce.number().int().min(1).optional(), pageSize: zz.coerce.number().int().min(1).max(500).optional() }).parse(req.query);
   const where = and(eq(quotationsTable.userId, userId), eq(quotationsTable.dataMode, dataMode), sql`${quotationsTable.deletedAt} IS NOT NULL`);
@@ -221,7 +221,7 @@ router.get("/quotations/deleted", async (req, res) => {
 });
 
 router.get("/quotations/export", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const dataMode = await currentDataMode();
   const rows = await db
     .select({ quotation: quotationsTable, clientName: clientsTable.name })
@@ -255,7 +255,7 @@ router.get("/quotations/export", async (req, res) => {
 router.post("/quotations/import", handleCsvImportUpload, async (req, res) => {
   if (!req.file) { res.status(400).json({ error: "No file uploaded" }); return; }
   try {
-    const userId = (req as unknown as AuthedRequest).userId;
+    const userId = (req as unknown as AuthedRequest).dataUserId!;
     const dataMode = await currentDataMode();
     const commit = req.query.commit === "true";
     const records: Record<string, string>[] = csvParse(req.file.buffer, { columns: true, skip_empty_lines: true, trim: true });
@@ -367,7 +367,7 @@ router.post("/quotations/import", handleCsvImportUpload, async (req, res) => {
 });
 
 router.post("/quotations", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const dataMode = await currentDataMode();
   const body = CreateQuotationBody.parse(req.body);
   const clientCheck = await assertClientOwnedByUser(userId, body.clientId, dataMode);
@@ -417,7 +417,7 @@ router.post("/quotations", async (req, res) => {
 });
 
 router.post("/quotations/quick-draft", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const dataMode = await currentDataMode();
   const [client] = await db
     .select({ id: clientsTable.id })
@@ -457,7 +457,7 @@ router.post("/quotations/quick-draft", async (req, res) => {
 });
 
 router.get("/quotations/:id", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const dataMode = await currentDataMode();
   const { id } = GetQuotationParams.parse(req.params);
   const [row] = await db
@@ -474,7 +474,7 @@ router.get("/quotations/:id", async (req, res) => {
 });
 
 router.delete("/quotations/bulk-delete", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const dataMode = await currentDataMode();
   const { ids } = BulkIdsBody.parse(req.body);
   if (ids.length === 0) { res.status(204).send(); return; }
@@ -492,7 +492,7 @@ router.delete("/quotations/bulk-delete", async (req, res) => {
 });
 
 router.patch("/quotations/bulk-status", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const dataMode = await currentDataMode();
   const { ids, status } = QuotationBulkStatusBody.parse(req.body);
   if (ids.length === 0) { res.status(204).send(); return; }
@@ -534,7 +534,7 @@ router.patch("/quotations/bulk-status", async (req, res) => {
 
 /** Status-only update — avoids round-tripping full line items from list rows. */
 router.patch("/quotations/:id/status", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const dataMode = await currentDataMode();
   const { id } = UpdateQuotationParams.parse(req.params);
   const body = QuotationStatusBody.parse(req.body);
@@ -592,7 +592,7 @@ router.patch("/quotations/:id/status", async (req, res) => {
 });
 
 router.patch("/quotations/:id/archive", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const dataMode = await currentDataMode();
   const { id } = UpdateQuotationParams.parse(req.params);
   const reason = zz.string().optional().parse((req.body as { cancellationReason?: string })?.cancellationReason);
@@ -640,7 +640,7 @@ router.patch("/quotations/:id/archive", async (req, res) => {
 });
 
 router.post("/quotations/:id/duplicate", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const dataMode = await currentDataMode();
   const { id } = UpdateQuotationParams.parse(req.params);
   const [src] = await db
@@ -681,7 +681,7 @@ router.post("/quotations/:id/duplicate", async (req, res) => {
 });
 
 router.patch("/quotations/:id", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const dataMode = await currentDataMode();
   const { id } = UpdateQuotationParams.parse(req.params);
   const body = UpdateQuotationBody.parse(req.body);
@@ -761,7 +761,7 @@ router.patch("/quotations/:id", async (req, res) => {
 });
 
 router.delete("/quotations/:id", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const dataMode = await currentDataMode();
   const { id } = DeleteQuotationParams.parse(req.params);
   const [row] = await db
@@ -776,7 +776,7 @@ router.delete("/quotations/:id", async (req, res) => {
 });
 
 router.post("/quotations/:id/restore", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const dataMode = await currentDataMode();
   const { id } = GetQuotationParams.parse(req.params);
   const [row] = await db
@@ -794,7 +794,7 @@ router.post("/quotations/:id/restore", async (req, res) => {
 });
 
 router.post("/quotations/:id/convert", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const dataMode = await currentDataMode();
   const { id } = ConvertQuotationParams.parse(req.params);
   const overrides =
@@ -916,7 +916,7 @@ router.post("/quotations/:id/convert", async (req, res) => {
 const SHARE_TOKEN_EXPIRY_DAYS = parseShareTokenExpiryDays(process.env.SHARE_TOKEN_EXPIRY_DAYS);
 
 router.post("/quotations/:id/share-token", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const dataMode = await currentDataMode();
   const { id } = GetQuotationParams.parse(req.params);
 
@@ -943,7 +943,7 @@ router.post("/quotations/:id/share-token", async (req, res) => {
 });
 
 router.delete("/quotations/:id/share-token", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const dataMode = await currentDataMode();
   const { id } = GetQuotationParams.parse(req.params);
 
@@ -966,7 +966,7 @@ router.delete("/quotations/:id/share-token", async (req, res) => {
 });
 
 router.post("/invoices/:id/share-token", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const dataMode = await currentDataMode();
   const { id } = GetInvoiceParams.parse(req.params);
 
@@ -993,7 +993,7 @@ router.post("/invoices/:id/share-token", async (req, res) => {
 });
 
 router.delete("/invoices/:id/share-token", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const dataMode = await currentDataMode();
   const { id } = GetInvoiceParams.parse(req.params);
 

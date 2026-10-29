@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation, useParams } from "wouter";
-import { useListClients } from "@workspace/api-client-react";
+import { useListClients, type Currency } from "@workspace/api-client-react";
 import {
   apiApproveProposal,
   apiCancelProposal,
@@ -9,7 +9,6 @@ import {
   apiEmailProposal,
   apiGetProposal,
   apiGetProposalSetupTemplates,
-  apiGetSettings,
   apiRefreshProposalShareLink,
   apiRejectProposal,
   apiRevokeProposalShareToken,
@@ -22,7 +21,8 @@ import {
   type ProposalPhase,
   type ProposalSetupTemplateId,
   type ProposalSetupTemplates,
-} from "@/lib/modulesApi";
+} from "@/lib/proposals-api";
+import { apiGetSettings } from "@/lib/modulesApi";
 import {
   DEFAULT_PAYMENT_SCHEDULE,
   DEFAULT_PHASES,
@@ -194,7 +194,7 @@ export default function ProposalBuilderPage() {
         proposalScope: proposalScope.trim() || undefined,
         scopePhases,
         totalAmount,
-        currency,
+        currency: currency as Currency,
         clientStaffCount,
         paymentSchedule,
         firmIntro: firmIntro.trim() || undefined,

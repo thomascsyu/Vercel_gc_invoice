@@ -43,7 +43,7 @@ function recurringDto(row: typeof recurringInvoicesTable.$inferSelect, items: Li
 const RECURRING_INVOICES_LIST_CAP = 500;
 
 router.get("/recurring-invoices", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const rows = await db
     .select()
     .from(recurringInvoicesTable)
@@ -55,7 +55,7 @@ router.get("/recurring-invoices", async (req, res) => {
 });
 
 router.post("/recurring-invoices", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const body = RecurringSchema.parse(req.body);
   const clientCheck = await assertClientOwnedByUser(userId, body.clientId);
   if (!clientCheck.ok) {
@@ -75,7 +75,7 @@ router.post("/recurring-invoices", async (req, res) => {
 });
 
 router.patch("/recurring-invoices/:id", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
   // NOTE: RecurringSchema declares `items` with `.default([])`, and zod v4's
   // `.partial()` still applies that default when the key is absent from the
@@ -115,7 +115,7 @@ router.patch("/recurring-invoices/:id", async (req, res) => {
 });
 
 router.delete("/recurring-invoices/:id", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
   await db
     .delete(recurringInvoicesTable)

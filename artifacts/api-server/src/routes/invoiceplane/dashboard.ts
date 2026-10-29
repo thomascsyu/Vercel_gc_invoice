@@ -38,7 +38,7 @@ function calendarMonthRange(
 }
 
 router.get("/dashboard", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const dataMode = await currentDataMode();
   const now = new Date();
   const curMonth = calendarMonthRange(now.getFullYear(), now.getMonth());
@@ -253,7 +253,7 @@ router.get("/dashboard", async (req, res) => {
 const ACTIVITY_FEED_LIMIT = 12;
 
 router.get("/activity", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const dataMode = await currentDataMode();
   const [invoices, quotations, payments] = await Promise.all([
     db

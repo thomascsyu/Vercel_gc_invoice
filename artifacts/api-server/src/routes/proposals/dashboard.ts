@@ -103,7 +103,7 @@ function aggregateIsoBreakdown(
 }
 
 router.get("/proposals/dashboard", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const userFilter = eq(proposalDocumentsTable.userId, userId);
   const { thisMonthStart, prevMonthStart } = monthBoundaries();
   const todayIso = new Date().toISOString().slice(0, 10);

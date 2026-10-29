@@ -2,7 +2,7 @@ import {
   JOB_REFERENCE_TEMPLATES,
   templateToJobReference,
 } from "@/lib/proposalJobReferenceTemplates";
-import type { ProposalJobReference } from "@/lib/modulesApi";
+import type { ProposalJobReference } from "@/lib/proposals-api";
 
 export function resolveJobReferencesFromTemplateIds(
   ids: string[] | undefined,

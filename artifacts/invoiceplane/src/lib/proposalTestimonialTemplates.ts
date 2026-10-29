@@ -1,4 +1,4 @@
-import type { ProposalTestimonial } from "@/lib/modulesApi";
+import type { ProposalTestimonial } from "@/lib/proposals-api";
 
 export type TestimonialTemplate = {
   id: string;

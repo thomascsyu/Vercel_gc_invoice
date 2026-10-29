@@ -38,7 +38,7 @@ function handleBackupUpload(req: Request, res: Response, next: NextFunction) {
 }
 
 router.get("/backup/export", requireAdmin, async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const includeCompany = req.query.includeCompany === "true";
   const dataModeParam = req.query.dataMode;
   const dataMode = dataModeParam === "live" || dataModeParam === "test" ? dataModeParam : undefined;
@@ -95,7 +95,7 @@ router.post("/backup/restore", requireAdmin, handleBackupUpload, async (req, res
     return;
   }
 
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const restoreCompany = body.restoreCompany ?? parsed.data.includeCompany;
 
   try {

@@ -1,4 +1,4 @@
-import type { ProposalJobReference } from "@/lib/modulesApi";
+import type { ProposalJobReference } from "@/lib/proposals-api";
 
 export type JobReferenceTemplate = {
   id: string;

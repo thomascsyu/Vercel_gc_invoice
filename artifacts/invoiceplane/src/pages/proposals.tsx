@@ -11,8 +11,6 @@ import {
   apiEmailProposal,
   apiExtractProposalForJobOrder,
   apiGetProposal,
-  apiGetSettings,
-  apiListConsultants,
   apiGetProposalSetupTemplates,
   apiListProposals,
   apiProposalActivity,
@@ -39,7 +37,8 @@ import {
   type ProposalStatus,
   type ProposalTemplateData,
   type ProposalTestimonial,
-} from "@/lib/modulesApi";
+} from "@/lib/proposals-api";
+import { apiGetSettings, apiListConsultants, type Consultant } from "@/lib/modulesApi";
 import { useListClients, type Client } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -136,7 +135,7 @@ function StatusBadge({ status }: { status: ProposalStatus }) {
 export default function ProposalsPage() {
   const qc = useQueryClient();
   const { toast } = useToast();
-  const [, setLocation] = useLocation();
+  const [pathname, setLocation] = useLocation();
   const searchString = useSearch();
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
@@ -166,6 +165,13 @@ export default function ProposalsPage() {
   const [panelRevoking, setPanelRevoking] = useState(false);
   const [panelRefreshing, setPanelRefreshing] = useState(false);
   const [createWizardOpen, setCreateWizardOpen] = useState(false);
+
+  useEffect(() => {
+    if (pathname === "/proposals/new") {
+      setCreateWizardOpen(true);
+      setPageView("list");
+    }
+  }, [pathname]);
 
   useEffect(() => {
     const params = new URLSearchParams(searchString);
@@ -225,7 +231,7 @@ export default function ProposalsPage() {
         page,
         pageSize,
         q: debouncedSearch || undefined,
-        status: filterStatus || undefined,
+        status: (filterStatus || undefined) as ProposalStatus | undefined,
         clientId: filterClientId || undefined,
       }),
   });
@@ -759,7 +765,7 @@ function ProposalEditor({
     queryFn: () => apiProposalQuestions(id),
     enabled: Boolean(id),
   });
-  const { data: consultants = [] } = useQuery({
+  const { data: consultants = [] } = useQuery<Consultant[]>({
     queryKey: ["consultants"],
     queryFn: apiListConsultants,
   });

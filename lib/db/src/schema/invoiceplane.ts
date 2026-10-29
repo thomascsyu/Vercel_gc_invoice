@@ -499,6 +499,14 @@ export const companySettingsTable = pgTable("invoiceplane_company_settings", {
   emailTemplates: jsonb("email_templates").$type<EmailTemplates | null>(),
   /** Per-document PDF layout configuration (invoice, quotation, jobOrder, receipt). */
   pdfDocumentLayouts: jsonb("pdf_document_layouts").$type<PdfDocumentLayoutsStored>(),
+  /**
+   * Google sub used for all scoped business data (clients, invoices, …).
+   * When null, the API resolves the workspace owner from env or the oldest admin user.
+   */
+  workspaceDataUserId: text("workspace_data_user_id").references(() => usersTable.googleSub, {
+    onDelete: "set null",
+    onUpdate: "cascade",
+  }),
   /** ISO proposal wizard defaults (ISO 9001, ISO 14001/45001, ISO 27001). */
   proposalSetupTemplates: jsonb("proposal_setup_templates").$type<Partial<ProposalSetupTemplates> | null>(),
   /** Default branding and profile wording for generated ISO proposals. */

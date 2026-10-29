@@ -36,7 +36,7 @@ import {
   type ProposalsDashboardActivityItem,
   type ProposalsDashboardAttentionItem,
   type ProposalsDashboardExpiringItem,
-} from "@/lib/modulesApi";
+} from "@/lib/proposals-api";
 import { eventLabel, formatLabel, statusBadge } from "@/lib/proposal-shared";
 
 const PIPELINE_ORDER: ProposalStatus[] = [
@@ -158,8 +158,14 @@ export function ProposalsDashboardPanel({
     );
   }
 
-  const pipelineDelta = pctDelta(data.pipelineCountPreviousMonth, data.pipelineCountThisMonth);
-  const confirmedDelta = pctDelta(data.confirmedCountPreviousMonth, data.confirmedCountThisMonth);
+  const pipelineDelta = pctDelta(
+    data.pipelineCountPreviousMonth ?? 0,
+    data.pipelineCountThisMonth ?? 0,
+  );
+  const confirmedDelta = pctDelta(
+    data.confirmedCountPreviousMonth ?? 0,
+    data.confirmedCountThisMonth ?? 0,
+  );
 
   const statCards = [
     {

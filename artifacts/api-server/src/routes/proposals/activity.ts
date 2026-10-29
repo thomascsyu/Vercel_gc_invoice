@@ -10,7 +10,7 @@ import { loadProposalOwned } from "./helpers";
 const router: IRouter = Router();
 
 router.get("/proposals/:id/activity", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
   const existing = await loadProposalOwned(userId, id);
   if (!existing) {
@@ -34,7 +34,7 @@ router.get("/proposals/:id/activity", async (req, res) => {
 });
 
 router.get("/proposals/:id/questions", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
   const existing = await loadProposalOwned(userId, id);
   if (!existing) {
@@ -61,7 +61,7 @@ router.get("/proposals/:id/questions", async (req, res) => {
 });
 
 router.post("/proposals/:id/questions/:questionId/reply", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const { id, questionId } = z.object({ id: z.string().uuid(), questionId: z.string().uuid() }).parse(req.params);
   const body = z.object({ reply: z.string().min(1).max(4000) }).parse(req.body ?? {});
   const existing = await loadProposalOwned(userId, id);

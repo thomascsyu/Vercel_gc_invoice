@@ -2,7 +2,7 @@ import { Plus } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import type { ProposalTestimonial } from "@/lib/modulesApi";
+import type { ProposalTestimonial } from "@/lib/proposals-api";
 import {
   TESTIMONIAL_TEMPLATES,
   templateToTestimonial,

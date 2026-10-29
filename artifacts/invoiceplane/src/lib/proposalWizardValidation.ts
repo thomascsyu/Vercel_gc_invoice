@@ -1,4 +1,4 @@
-import type { ProposalPaymentScheduleItem, ProposalPhase } from "@/lib/modulesApi";
+import type { ProposalPaymentScheduleItem, ProposalPhase } from "@/lib/proposals-api";
 
 /** Rounded to 2dp so e.g. 33.33 + 33.33 + 33.34 reliably reads (and compares) as exactly 100. */
 export function paymentScheduleTotal(schedule: ProposalPaymentScheduleItem[]): number {

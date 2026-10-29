@@ -5,7 +5,7 @@ import type {
   ProposalPhase,
   ProposalSetupTemplateId,
   ProposalTestimonial,
-} from "@/lib/modulesApi";
+} from "@/lib/proposals-api";
 
 const STORAGE_KEY = "invoiceplane-proposal-wizard-draft";
 

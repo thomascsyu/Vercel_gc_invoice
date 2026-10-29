@@ -7,6 +7,7 @@ import lifecycleRouter from "./lifecycle";
 import activityRouter from "./activity";
 import milestonesRouter from "./milestones";
 import uploadsRouter from "./uploads";
+import { requireProposalsEnabled } from "./requireProposalsEnabled";
 
 const router: IRouter = Router();
 
@@ -15,6 +16,7 @@ router.use(publicRouter);
 
 // ---------- Authenticated routes ----------
 router.use(requireAuth);
+router.use(requireProposalsEnabled);
 
 router.use(dashboardRouter);
 router.use(coreRouter);

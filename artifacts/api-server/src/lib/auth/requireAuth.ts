@@ -11,9 +11,13 @@ import {
   hashApiKey,
   type ApiKeyPermission,
 } from "./apiKey";
+import { attachWorkspaceDataUserId } from "../workspaceScope";
 
 export type AuthedRequest = Request & {
+  /** Authenticated Google sub (actor). */
   userId: string;
+  /** Shared workspace owner sub for scoped business data. */
+  dataUserId?: string;
   role: "admin" | "user";
   authType?: "session" | "api_key";
   apiKeyPermission?: ApiKeyPermission;
@@ -174,6 +178,7 @@ export function requireAuth(
         areq.authType = "api_key";
         areq.apiKeyPermission =
           key.permission === "read" ? "read" : "read_write";
+        await attachWorkspaceDataUserId(areq);
         await db
           .update(apiKeysTable)
           .set({ lastUsedAt: new Date() })
@@ -203,7 +208,9 @@ export function requireAuth(
       areq.userId = user.userId;
       areq.role = user.role;
       areq.authType = "session";
-      next();
+      attachWorkspaceDataUserId(areq)
+        .then(() => next())
+        .catch((e) => next(e));
     })
     .catch((e) => next(e));
 }

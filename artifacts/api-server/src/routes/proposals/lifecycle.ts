@@ -54,7 +54,7 @@ async function issueShareTokenIfNeeded(
 const router: IRouter = Router();
 
 router.post("/proposals/:id/submit", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
   const existing = await loadProposalOwned(userId, id);
   if (!existing || existing.proposal.status !== "draft") {
@@ -72,7 +72,7 @@ router.post("/proposals/:id/submit", async (req, res) => {
 });
 
 router.post("/proposals/:id/approve", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
   const existing = await loadProposalOwned(userId, id);
   if (!existing || existing.proposal.status !== "pending_approval") {
@@ -90,7 +90,7 @@ router.post("/proposals/:id/approve", async (req, res) => {
 });
 
 router.post("/proposals/:id/reject", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
   const body = z.object({ reason: z.string().max(4000).optional() }).parse(req.body ?? {});
   const existing = await loadProposalOwned(userId, id);
@@ -113,7 +113,7 @@ router.post("/proposals/:id/reject", async (req, res) => {
 });
 
 router.post("/proposals/:id/cancel", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
   const body = z.object({ reason: z.string().max(4000).optional() }).parse(req.body ?? {});
   const existing = await loadProposalOwned(userId, id);
@@ -146,7 +146,7 @@ router.post("/proposals/:id/cancel", async (req, res) => {
 });
 
 router.post("/proposals/:id/send", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
   const existing = await loadProposalOwned(userId, id);
   if (!existing || existing.proposal.status !== "approved") {
@@ -174,7 +174,7 @@ router.post("/proposals/:id/send", async (req, res) => {
 });
 
 router.post("/proposals/:id/share-link", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
   const existing = await loadProposalOwned(userId, id);
   if (!existing) {
@@ -194,7 +194,7 @@ router.post("/proposals/:id/share-link", async (req, res) => {
 });
 
 router.delete("/proposals/:id/share-token", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
   const existing = await loadProposalOwned(userId, id);
   if (!existing) {
@@ -209,7 +209,7 @@ router.delete("/proposals/:id/share-token", async (req, res) => {
 });
 
 router.post("/proposals/:id/email", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
   const body = EmailBodySchema.parse(req.body ?? {});
   const existing = await loadProposalOwned(userId, id);
@@ -300,7 +300,7 @@ router.post("/proposals/:id/email", async (req, res) => {
 });
 
 router.post("/proposals/:id/no-response", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
   const existing = await loadProposalOwned(userId, id);
   if (!existing || existing.proposal.status !== "sent") {
@@ -317,7 +317,7 @@ router.post("/proposals/:id/no-response", async (req, res) => {
 });
 
 router.post("/proposals/:id/new-revision", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
   const existing = await loadProposalOwned(userId, id);
   if (!existing || !["revision_requested", "sent", "no_response"].includes(existing.proposal.status)) {
@@ -377,7 +377,7 @@ router.post("/proposals/:id/new-revision", async (req, res) => {
 });
 
 router.get("/proposals/:id/pdf", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).userId;
+  const userId = (req as unknown as AuthedRequest).dataUserId!;
   const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
   const row = await loadProposalOwned(userId, id);
   if (!row) {

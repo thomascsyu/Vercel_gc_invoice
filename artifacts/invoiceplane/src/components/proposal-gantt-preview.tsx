@@ -1,4 +1,4 @@
-import type { ProposalPhase } from "@/lib/modulesApi";
+import type { ProposalPhase } from "@/lib/proposals-api";
 import { cn } from "@/lib/utils";
 
 const TOTAL_MONTHS = 6;

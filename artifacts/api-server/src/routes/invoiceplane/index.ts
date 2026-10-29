@@ -22,7 +22,7 @@ router.use(publicRouter);
 router.use(requireAuth);
 
 router.use(async (req, _res, next) => {
-  await seedForUser((req as unknown as AuthedRequest).userId);
+  await seedForUser((req as unknown as AuthedRequest).dataUserId!);
   next();
 });
 
