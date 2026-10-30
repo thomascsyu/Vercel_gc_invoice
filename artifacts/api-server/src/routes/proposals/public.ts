@@ -127,7 +127,7 @@ router.post("/proposals/:id/public/question", async (req, res) => {
     eventData: { questionId: q.id, questionText: body.questionText.trim() },
   });
   notifyStaffProposalEvent(
-    proposal.userId,
+    proposal.createdByUserId ?? proposal.userId,
     `Question on proposal ${proposal.proposalNo}`,
     `<p>A client asked a question on proposal <strong>${proposal.proposalNo}</strong> (Rev. ${proposal.proposalRevision}).</p>
 <p><strong>Question:</strong><br/>${escapeHtml(body.questionText.trim()).replace(/\n/g, "<br/>")}</p>
@@ -177,7 +177,7 @@ router.post("/proposals/:id/public/confirm", async (req, res) => {
     eventData: { signatureName: body.signatureName.trim() },
   });
   notifyStaffProposalEvent(
-    proposal.userId,
+    proposal.createdByUserId ?? proposal.userId,
     `Proposal ${proposal.proposalNo} confirmed`,
     `<p>Proposal <strong>${proposal.proposalNo}</strong> (Rev. ${proposal.proposalRevision}) was confirmed by the client.</p>
 <p>Signed by: ${escapeHtml(body.signatureName.trim())}</p>`,
@@ -226,7 +226,7 @@ router.post("/proposals/:id/public/revise", async (req, res) => {
     eventData: { comment: body.comment.trim() },
   });
   notifyStaffProposalEvent(
-    proposal.userId,
+    proposal.createdByUserId ?? proposal.userId,
     `Revision requested: ${proposal.proposalNo}`,
     `<p>A client requested a revision for proposal <strong>${proposal.proposalNo}</strong> (Rev. ${proposal.proposalRevision}).</p>
 <p><strong>Comment:</strong><br/>${escapeHtml(body.comment.trim()).replace(/\n/g, "<br/>")}</p>`,

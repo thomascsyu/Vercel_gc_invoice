@@ -16,7 +16,7 @@ function PageFallback() {
 
 export function ProposalsListGate() {
   const { data } = useAuthSession();
-  if (!data?.capabilities?.proposals) return <ProposalsDisabled />;
+  if (data?.capabilities?.proposals === false) return <ProposalsDisabled />;
   return (
     <Suspense fallback={<PageFallback />}>
       <ProposalsPage />
@@ -26,7 +26,7 @@ export function ProposalsListGate() {
 
 export function ProposalBuilderGate() {
   const { data } = useAuthSession();
-  if (!data?.capabilities?.proposals) return <ProposalsDisabled />;
+  if (data?.capabilities?.proposals === false) return <ProposalsDisabled />;
   return (
     <Suspense fallback={<PageFallback />}>
       <ProposalBuilderPage />

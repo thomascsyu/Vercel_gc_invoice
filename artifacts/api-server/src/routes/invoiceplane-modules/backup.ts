@@ -1,7 +1,8 @@
 import { Router, type IRouter, type NextFunction, type Request, type Response } from "express";
 import multer from "multer";
 import { z } from "zod/v4";
-import { type AuthedRequest } from "../../lib/auth/requireAuth";
+import { scopedDataUserId } from "../../lib/auth/scopedUserId";
+import { invalidateWorkspaceScopeCaches } from "../../lib/workspaceScope";
 import { requireAdmin } from "../../lib/auth/requireAdmin";
 import {
   BACKUP_VERSION,
@@ -38,7 +39,7 @@ function handleBackupUpload(req: Request, res: Response, next: NextFunction) {
 }
 
 router.get("/backup/export", requireAdmin, async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const includeCompany = req.query.includeCompany === "true";
   const dataModeParam = req.query.dataMode;
   const dataMode = dataModeParam === "live" || dataModeParam === "test" ? dataModeParam : undefined;
@@ -95,7 +96,7 @@ router.post("/backup/restore", requireAdmin, handleBackupUpload, async (req, res
     return;
   }
 
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const restoreCompany = body.restoreCompany ?? parsed.data.includeCompany;
 
   try {
@@ -105,6 +106,7 @@ router.post("/backup/restore", requireAdmin, handleBackupUpload, async (req, res
       restoreCompany,
       dataMode: body.restoreDataMode,
     });
+    if (restoreCompany) invalidateWorkspaceScopeCaches();
     res.json(result);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Restore failed";

@@ -769,6 +769,8 @@ export const proposalDocumentsTable = pgTable("invoiceplane_proposal_documents",
   approvedAt: timestamp("approved_at", { withTimezone: true }),
   sentAt: timestamp("sent_at", { withTimezone: true }),
   supersededById: uuid("superseded_by_id"),
+  /** Staff member who created this proposal/revision (portal alerts go to them). Null for legacy rows. */
+  createdByUserId: text("created_by_user_id").references(() => usersTable.googleSub, { onDelete: "set null", onUpdate: "cascade" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [

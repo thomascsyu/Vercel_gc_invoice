@@ -9,7 +9,7 @@ import {
   proposalDocumentsTable,
   type ProposalStatus,
 } from "@workspace/db";
-import { type AuthedRequest } from "../../lib/auth/requireAuth";
+import { scopedDataUserId } from "../../lib/auth/scopedUserId";
 import { requireAdmin } from "../../lib/auth/requireAdmin";
 import { getCompanySettings, invalidateCompanySettingsCache } from "../../lib/companySettingsCache";
 import { mergeProposalSetupTemplates } from "../../lib/proposalSetupTemplates";
@@ -103,7 +103,7 @@ function aggregateIsoBreakdown(
 }
 
 router.get("/proposals/dashboard", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const userFilter = eq(proposalDocumentsTable.userId, userId);
   const { thisMonthStart, prevMonthStart } = monthBoundaries();
   const todayIso = new Date().toISOString().slice(0, 10);

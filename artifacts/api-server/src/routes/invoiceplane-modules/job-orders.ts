@@ -15,7 +15,7 @@ import { z } from "zod/v4";
 import { parse as csvParse } from "csv-parse/sync";
 import { stringify as csvStringify } from "csv-stringify/sync";
 import multer from "multer";
-import { type AuthedRequest } from "../../lib/auth/requireAuth";
+import { scopedDataUserId } from "../../lib/auth/scopedUserId";
 import { assertClientOwnedByUser } from "../../lib/clientOwnership";
 import { currentDataMode, type DataMode } from "../../lib/dataMode";
 import {
@@ -152,7 +152,7 @@ const JobOrderListQuerySchema = z.object({
 });
 
 router.get("/job-orders", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const dataMode = await currentDataMode();
   const query = JobOrderListQuerySchema.parse(req.query);
   const page = query.page ?? 1;
@@ -261,7 +261,7 @@ router.get("/job-orders", async (req, res) => {
 });
 
 router.get("/job-orders/export", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const dataMode = await currentDataMode();
   const rows = await db
     .select({ jo: jobOrdersTable, clientName: clientsTable.name })
@@ -289,7 +289,7 @@ router.get("/job-orders/export", async (req, res) => {
 router.post("/job-orders/import", upload.single("file"), async (req, res) => {
   if (!req.file) { res.status(400).json({ error: "No file uploaded" }); return; }
   try {
-    const userId = (req as unknown as AuthedRequest).dataUserId!;
+    const userId = scopedDataUserId(req);
     const dataMode = await currentDataMode();
     const commit = req.query.commit === "true";
     const records: Record<string, string>[] = csvParse(req.file.buffer, { columns: true, skip_empty_lines: true, trim: true });
@@ -449,7 +449,7 @@ router.post("/job-orders/extract-proposal", uploadProposal.single("file"), async
     res.status(400).json({ error: "No file uploaded" });
     return;
   }
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const settings = await ensureCompanySettings();
   const apiKey = (settings.deepseekApiKey ?? "").trim();
   const model = (settings.deepseekModel ?? "deepseek-v4-flashas").trim() || "deepseek-v4-flashas";
@@ -491,7 +491,7 @@ router.post("/job-orders/extract-proposal", uploadProposal.single("file"), async
 });
 
 router.post("/job-orders", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const dataMode = await currentDataMode();
   try {
     const body = JobOrderCreateSchema.parse(req.body);
@@ -531,7 +531,7 @@ router.post("/job-orders", async (req, res) => {
 });
 
 router.post("/job-orders/quick-draft", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const dataMode = await currentDataMode();
   const [client] = await db
     .select({ id: clientsTable.id })
@@ -564,7 +564,7 @@ router.post("/job-orders/quick-draft", async (req, res) => {
 });
 
 router.patch("/job-orders/:id", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const dataMode = await currentDataMode();
   const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
   try {
@@ -636,7 +636,7 @@ router.patch("/job-orders/:id", async (req, res) => {
 });
 
 router.patch("/job-orders/:id/archive", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const dataMode = await currentDataMode();
   const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
   const [row] = await db
@@ -654,7 +654,7 @@ router.patch("/job-orders/:id/archive", async (req, res) => {
 });
 
 router.post("/job-orders/:id/duplicate", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const dataMode = await currentDataMode();
   const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
   const [src] = await db
@@ -688,7 +688,7 @@ router.post("/job-orders/:id/duplicate", async (req, res) => {
 });
 
 router.delete("/job-orders/:id", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const dataMode = await currentDataMode();
   const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
   await db
@@ -750,7 +750,7 @@ async function buildJobOrderPdf(
 }
 
 router.get("/job-orders/:id/pdf", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const dataMode = await currentDataMode();
   const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
   const result = await buildJobOrderPdf(id, userId, dataMode);
@@ -770,7 +770,7 @@ router.post("/job-orders/:id/email-consultant", async (req, res) => {
     });
     return;
   }
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const dataMode = await currentDataMode();
   const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
   const { consultantId } = z.object({ consultantId: z.string().uuid() }).parse(req.body);
@@ -843,7 +843,7 @@ const ConvertJobOrderBodySchema = z.object({
 });
 
 router.post("/job-orders/from-quotation/:id", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const dataMode = await currentDataMode();
   const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
   try {
@@ -887,7 +887,7 @@ router.post("/job-orders/from-quotation/:id", async (req, res) => {
 });
 
 router.post("/job-orders/from-invoice/:id", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const dataMode = await currentDataMode();
   const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
   try {

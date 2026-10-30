@@ -25,7 +25,7 @@ import { logger } from "../../lib/logger";
 import { clientImportJobRateLimiter } from "../../lib/rateLimit";
 import { stringify as csvStringify } from "csv-stringify/sync";
 import { parse as csvParse } from "csv-parse/sync";
-import { type AuthedRequest } from "../../lib/auth/requireAuth";
+import { actorUserId, scopedDataUserId } from "../../lib/auth/scopedUserId";
 import { currentDataMode, type DataMode } from "../../lib/dataMode";
 import { DEFAULT_PAYMENT_SCHEDULE, DEFAULT_SCOPE_PHASES, DEFAULT_TERMS } from "../../lib/proposalDefaults";
 import { isUniqueViolation } from "../../lib/pgErrors";
@@ -240,7 +240,7 @@ const ClientsListQuery = ListClientsQueryParams.extend({
   sortDir: zz.enum(["asc", "desc"]).optional(),
 });
 router.get("/clients", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const dataMode = await currentDataMode();
   const query = ClientsListQuery.parse(req.query);
   const conditions = [eq(clientsTable.userId, userId), eq(clientsTable.dataMode, dataMode), isNull(clientsTable.deletedAt)];
@@ -292,7 +292,7 @@ router.get("/clients", async (req, res) => {
 
 // Registered before /clients/:id so "deleted" isn't captured as an :id.
 router.get("/clients/deleted", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const dataMode = await currentDataMode();
   const query = zz.object({ page: zz.coerce.number().int().min(1).optional(), pageSize: zz.coerce.number().int().min(1).max(500).optional() }).parse(req.query);
   const where = and(eq(clientsTable.userId, userId), eq(clientsTable.dataMode, dataMode), sql`${clientsTable.deletedAt} IS NOT NULL`);
@@ -322,7 +322,7 @@ const ClientOptionsQuery = zz.object({
 
 /** Lightweight client picker payload for invoice/quotation forms and filters. */
 router.get("/clients/options", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const dataMode = await currentDataMode();
   const query = ClientOptionsQuery.parse(req.query);
   const limit = query.limit ?? 200;
@@ -352,7 +352,7 @@ router.get("/clients/options", async (req, res) => {
 });
 
 router.get("/clients/export", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const dataMode = await currentDataMode();
   const rows = await db
     .select()
@@ -389,7 +389,7 @@ router.post("/clients/import", handleCsvImportUpload, async (req, res) => {
     return;
   }
   try {
-    const userId = (req as unknown as AuthedRequest).dataUserId!;
+    const userId = scopedDataUserId(req);
     const dataMode = await currentDataMode();
     const commit = req.query.commit === "true";
     const overwrite = req.query.overwrite === "true";
@@ -516,7 +516,7 @@ router.post("/clients/import", handleCsvImportUpload, async (req, res) => {
 });
 
 router.get("/clients/import/jobs/:jobId", clientImportJobRateLimiter, (req, res) => {
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const jobId = typeof req.params.jobId === "string" ? req.params.jobId : "";
   const job = clientImportJobs.get(jobId);
   if (!job || job.userId !== userId) {
@@ -556,7 +556,7 @@ router.get("/clients/import/jobs/:jobId", clientImportJobRateLimiter, (req, res)
 });
 
 router.post("/clients", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const dataMode = await currentDataMode();
   const body = CreateClientBody.parse(req.body);
   const requested = body.clientCode?.trim() || buildClientCode(body.name);
@@ -572,7 +572,7 @@ router.post("/clients", async (req, res) => {
 });
 
 router.get("/clients/:id", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const dataMode = await currentDataMode();
   const { id } = GetClientParams.parse(req.params);
   const [row] = await db
@@ -589,7 +589,7 @@ router.get("/clients/:id", async (req, res) => {
 const BulkClientStatusBody = zz.object({ ids: zz.array(zz.string().uuid()), isActive: zz.boolean() });
 
 router.delete("/clients/bulk-delete", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const dataMode = await currentDataMode();
   const { ids } = BulkIdsBody.parse(req.body);
   if (ids.length === 0) { res.status(204).send(); return; }
@@ -601,7 +601,7 @@ router.delete("/clients/bulk-delete", async (req, res) => {
   if (deleted.length > 0) {
     await db.insert(auditLogTable).values(
       deleted.map((row) => ({
-        userId,
+        userId: actorUserId(req),
         dataMode,
         entityType: "client" as const,
         entityId: row.id,
@@ -613,7 +613,7 @@ router.delete("/clients/bulk-delete", async (req, res) => {
 });
 
 router.patch("/clients/bulk-status", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const dataMode = await currentDataMode();
   const { ids, isActive } = BulkClientStatusBody.parse(req.body);
   if (ids.length === 0) { res.status(204).send(); return; }
@@ -623,7 +623,7 @@ router.patch("/clients/bulk-status", async (req, res) => {
 });
 
 router.patch("/clients/:id", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const dataMode = await currentDataMode();
   const { id } = UpdateClientParams.parse(req.params);
   const body = UpdateClientBody.parse(req.body);
@@ -653,7 +653,7 @@ router.patch("/clients/:id", async (req, res) => {
 });
 
 router.delete("/clients/:id", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const dataMode = await currentDataMode();
   const { id } = DeleteClientParams.parse(req.params);
   const [row] = await db
@@ -662,13 +662,13 @@ router.delete("/clients/:id", async (req, res) => {
     .where(and(eq(clientsTable.userId, userId), eq(clientsTable.dataMode, dataMode), isNull(clientsTable.deletedAt), eq(clientsTable.id, id)))
     .returning({ id: clientsTable.id });
   if (row) {
-    await logAuditEvent({ userId, dataMode, entityType: "client", entityId: row.id, eventType: "deleted" });
+    await logAuditEvent({ userId: actorUserId(req), dataMode, entityType: "client", entityId: row.id, eventType: "deleted" });
   }
   res.status(204).send();
 });
 
 router.post("/clients/:id/restore", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const dataMode = await currentDataMode();
   const { id } = GetClientParams.parse(req.params);
   const [existing] = await db
@@ -695,7 +695,7 @@ router.post("/clients/:id/restore", async (req, res) => {
       res.status(404).json({ error: "Client not found" });
       return;
     }
-    await logAuditEvent({ userId, dataMode, entityType: "client", entityId: id, eventType: "restored" });
+    await logAuditEvent({ userId: actorUserId(req), dataMode, entityType: "client", entityId: id, eventType: "restored" });
     res.json(clientDto(row));
   } catch (err) {
     if (isUniqueViolation(err)) {
@@ -747,7 +747,7 @@ async function loadClientProposal(userId: string, clientId: string) {
 }
 
 router.get("/clients/:id/proposal", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const dataMode = await currentDataMode();
   const { id } = ClientProposalParams.parse(req.params);
   const [client] = await db
@@ -766,7 +766,7 @@ router.get("/clients/:id/proposal", async (req, res) => {
 });
 
 router.post("/clients/:id/proposal/migrate", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const dataMode = await currentDataMode();
   const { id } = ClientProposalParams.parse(req.params);
 
@@ -822,6 +822,7 @@ router.post("/clients/:id/proposal/migrate", async (req, res) => {
     .insert(proposalDocumentsTable)
     .values({
       userId,
+      createdByUserId: actorUserId(req),
       clientId: id,
       proposalNo,
       proposalRevision: legacy?.proposalRevision ?? 0,
@@ -847,7 +848,7 @@ router.post("/clients/:id/proposal/migrate", async (req, res) => {
 });
 
 router.put("/clients/:id/proposal", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const dataMode = await currentDataMode();
   const { id } = ClientProposalParams.parse(req.params);
   const body = UpsertClientProposalBody.parse(req.body);

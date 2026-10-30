@@ -9,7 +9,7 @@ import {
 import { and, eq } from "drizzle-orm";
 import { Router, type IRouter } from "express";
 import { z } from "zod/v4";
-import { type AuthedRequest } from "../../lib/auth/requireAuth";
+import { scopedDataUserId } from "../../lib/auth/scopedUserId";
 import { getCompanySettings } from "../../lib/companySettingsCache";
 import {
   resolveSender,
@@ -100,7 +100,7 @@ async function assertNotTestModeForEmail(res: import("express").Response): Promi
 
 router.post("/invoices/:id/email", async (req, res) => {
   if (!(await assertNotTestModeForEmail(res))) return;
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
   const body = EmailBodySchema.parse(req.body ?? {});
 
@@ -173,7 +173,7 @@ router.post("/invoices/:id/email", async (req, res) => {
 // POST /invoices/:id/email/reminder - Send payment reminder
 router.post("/invoices/:id/email/reminder", async (req, res) => {
   if (!(await assertNotTestModeForEmail(res))) return;
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
   const body = EmailBodySchema.parse(req.body ?? {});
 
@@ -247,7 +247,7 @@ router.post("/invoices/:id/email/reminder", async (req, res) => {
 // POST /quotations/:id/email - Send quotation to client
 router.post("/quotations/:id/email", async (req, res) => {
   if (!(await assertNotTestModeForEmail(res))) return;
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
   const body = EmailBodySchema.parse(req.body ?? {});
 
@@ -321,7 +321,7 @@ router.post("/quotations/:id/email", async (req, res) => {
 // POST /receipts/:id/email - Send receipt to client
 router.post("/receipts/:id/email", async (req, res) => {
   if (!(await assertNotTestModeForEmail(res))) return;
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
   const body = EmailBodySchema.parse(req.body ?? {});
 

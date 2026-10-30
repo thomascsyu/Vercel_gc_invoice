@@ -17,7 +17,7 @@ import { and, asc, count, desc, eq, gte, ilike, inArray, isNull, lt, or, sql } f
 import { Router, type IRouter } from "express";
 import { stringify as csvStringify } from "csv-stringify/sync";
 import { parse as csvParse } from "csv-parse/sync";
-import { type AuthedRequest } from "../../lib/auth/requireAuth";
+import { actorUserId, scopedDataUserId } from "../../lib/auth/scopedUserId";
 import { assertClientOwnedByUser } from "../../lib/clientOwnership";
 import { joinQuotationClient } from "../../lib/clientJoins";
 import { currentDataMode } from "../../lib/dataMode";
@@ -119,7 +119,7 @@ const QuotationStatusBody = zz.object({
 });
 
 router.get("/quotations", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const dataMode = await currentDataMode();
   const query = ListQuotationsQueryParams.parse(req.query);
   const conditions = [eq(quotationsTable.userId, userId), eq(quotationsTable.dataMode, dataMode), isNull(quotationsTable.deletedAt)];
@@ -191,7 +191,7 @@ router.get("/quotations", async (req, res) => {
 
 // Registered before /quotations/:id so "deleted" isn't captured as an :id.
 router.get("/quotations/deleted", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const dataMode = await currentDataMode();
   const query = zz.object({ page: zz.coerce.number().int().min(1).optional(), pageSize: zz.coerce.number().int().min(1).max(500).optional() }).parse(req.query);
   const where = and(eq(quotationsTable.userId, userId), eq(quotationsTable.dataMode, dataMode), sql`${quotationsTable.deletedAt} IS NOT NULL`);
@@ -221,7 +221,7 @@ router.get("/quotations/deleted", async (req, res) => {
 });
 
 router.get("/quotations/export", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const dataMode = await currentDataMode();
   const rows = await db
     .select({ quotation: quotationsTable, clientName: clientsTable.name })
@@ -255,7 +255,7 @@ router.get("/quotations/export", async (req, res) => {
 router.post("/quotations/import", handleCsvImportUpload, async (req, res) => {
   if (!req.file) { res.status(400).json({ error: "No file uploaded" }); return; }
   try {
-    const userId = (req as unknown as AuthedRequest).dataUserId!;
+    const userId = scopedDataUserId(req);
     const dataMode = await currentDataMode();
     const commit = req.query.commit === "true";
     const records: Record<string, string>[] = csvParse(req.file.buffer, { columns: true, skip_empty_lines: true, trim: true });
@@ -367,7 +367,7 @@ router.post("/quotations/import", handleCsvImportUpload, async (req, res) => {
 });
 
 router.post("/quotations", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const dataMode = await currentDataMode();
   const body = CreateQuotationBody.parse(req.body);
   const clientCheck = await assertClientOwnedByUser(userId, body.clientId, dataMode);
@@ -417,7 +417,7 @@ router.post("/quotations", async (req, res) => {
 });
 
 router.post("/quotations/quick-draft", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const dataMode = await currentDataMode();
   const [client] = await db
     .select({ id: clientsTable.id })
@@ -457,7 +457,7 @@ router.post("/quotations/quick-draft", async (req, res) => {
 });
 
 router.get("/quotations/:id", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const dataMode = await currentDataMode();
   const { id } = GetQuotationParams.parse(req.params);
   const [row] = await db
@@ -474,7 +474,7 @@ router.get("/quotations/:id", async (req, res) => {
 });
 
 router.delete("/quotations/bulk-delete", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const dataMode = await currentDataMode();
   const { ids } = BulkIdsBody.parse(req.body);
   if (ids.length === 0) { res.status(204).send(); return; }
@@ -485,14 +485,14 @@ router.delete("/quotations/bulk-delete", async (req, res) => {
     .returning({ id: quotationsTable.id });
   if (deleted.length > 0) {
     await db.insert(auditLogTable).values(
-      deleted.map((row) => ({ userId, dataMode, entityType: "quotation" as const, entityId: row.id, eventType: "deleted" as const })),
+      deleted.map((row) => ({ userId: actorUserId(req), dataMode, entityType: "quotation" as const, entityId: row.id, eventType: "deleted" as const })),
     );
   }
   res.status(204).send();
 });
 
 router.patch("/quotations/bulk-status", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const dataMode = await currentDataMode();
   const { ids, status } = QuotationBulkStatusBody.parse(req.body);
   if (ids.length === 0) { res.status(204).send(); return; }
@@ -520,7 +520,7 @@ router.patch("/quotations/bulk-status", async (req, res) => {
   if (changed.length > 0) {
     await db.insert(auditLogTable).values(
       changed.map((row) => ({
-        userId,
+        userId: actorUserId(req),
         dataMode,
         entityType: "quotation" as const,
         entityId: row.id,
@@ -534,7 +534,7 @@ router.patch("/quotations/bulk-status", async (req, res) => {
 
 /** Status-only update — avoids round-tripping full line items from list rows. */
 router.patch("/quotations/:id/status", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const dataMode = await currentDataMode();
   const { id } = UpdateQuotationParams.parse(req.params);
   const body = QuotationStatusBody.parse(req.body);
@@ -574,7 +574,7 @@ router.patch("/quotations/:id/status", async (req, res) => {
   }
   if (existing.status !== body.status) {
     await logAuditEvent({
-      userId,
+      userId: actorUserId(req),
       dataMode,
       entityType: "quotation",
       entityId: id,
@@ -592,7 +592,7 @@ router.patch("/quotations/:id/status", async (req, res) => {
 });
 
 router.patch("/quotations/:id/archive", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const dataMode = await currentDataMode();
   const { id } = UpdateQuotationParams.parse(req.params);
   const reason = zz.string().optional().parse((req.body as { cancellationReason?: string })?.cancellationReason);
@@ -623,7 +623,7 @@ router.patch("/quotations/:id/archive", async (req, res) => {
     return;
   }
   await logAuditEvent({
-    userId,
+    userId: actorUserId(req),
     dataMode,
     entityType: "quotation",
     entityId: id,
@@ -640,7 +640,7 @@ router.patch("/quotations/:id/archive", async (req, res) => {
 });
 
 router.post("/quotations/:id/duplicate", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const dataMode = await currentDataMode();
   const { id } = UpdateQuotationParams.parse(req.params);
   const [src] = await db
@@ -681,7 +681,7 @@ router.post("/quotations/:id/duplicate", async (req, res) => {
 });
 
 router.patch("/quotations/:id", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const dataMode = await currentDataMode();
   const { id } = UpdateQuotationParams.parse(req.params);
   const body = UpdateQuotationBody.parse(req.body);
@@ -749,7 +749,7 @@ router.patch("/quotations/:id", async (req, res) => {
   }
   if (existing.status !== nextStatus) {
     await logAuditEvent({
-      userId,
+      userId: actorUserId(req),
       dataMode,
       entityType: "quotation",
       entityId: id,
@@ -761,7 +761,7 @@ router.patch("/quotations/:id", async (req, res) => {
 });
 
 router.delete("/quotations/:id", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const dataMode = await currentDataMode();
   const { id } = DeleteQuotationParams.parse(req.params);
   const [row] = await db
@@ -770,13 +770,13 @@ router.delete("/quotations/:id", async (req, res) => {
     .where(and(eq(quotationsTable.userId, userId), eq(quotationsTable.dataMode, dataMode), isNull(quotationsTable.deletedAt), eq(quotationsTable.id, id)))
     .returning({ id: quotationsTable.id });
   if (row) {
-    await logAuditEvent({ userId, dataMode, entityType: "quotation", entityId: id, eventType: "deleted" });
+    await logAuditEvent({ userId: actorUserId(req), dataMode, entityType: "quotation", entityId: id, eventType: "deleted" });
   }
   res.status(204).send();
 });
 
 router.post("/quotations/:id/restore", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const dataMode = await currentDataMode();
   const { id } = GetQuotationParams.parse(req.params);
   const [row] = await db
@@ -788,13 +788,13 @@ router.post("/quotations/:id/restore", async (req, res) => {
     res.status(404).json({ error: "Quotation not found" });
     return;
   }
-  await logAuditEvent({ userId, dataMode, entityType: "quotation", entityId: id, eventType: "restored" });
+  await logAuditEvent({ userId: actorUserId(req), dataMode, entityType: "quotation", entityId: id, eventType: "restored" });
   const items = await loadLineItems(db, QUOTATION_ITEMS, id);
   res.json(quotationDto(row, items));
 });
 
 router.post("/quotations/:id/convert", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const dataMode = await currentDataMode();
   const { id } = ConvertQuotationParams.parse(req.params);
   const overrides =
@@ -885,7 +885,7 @@ router.post("/quotations/:id/convert", async (req, res) => {
         .set({ status: "invoiced", convertedInvoiceId: inserted.id, updatedAt: new Date() })
         .where(and(eq(quotationsTable.userId, userId), eq(quotationsTable.dataMode, dataMode), isNull(quotationsTable.deletedAt), eq(quotationsTable.id, id)));
       await logAuditEvent(
-        { userId, dataMode, entityType: "quotation", entityId: id, eventType: "status_changed", eventData: { from: quotation.status, to: "invoiced" } },
+        { userId: actorUserId(req), dataMode, entityType: "quotation", entityId: id, eventType: "status_changed", eventData: { from: quotation.status, to: "invoiced" } },
         tx,
       );
       return { kind: "ok" as const, invoice: inserted, invoiceItems, consultantIds: consultantIds ?? [] };
@@ -916,7 +916,7 @@ router.post("/quotations/:id/convert", async (req, res) => {
 const SHARE_TOKEN_EXPIRY_DAYS = parseShareTokenExpiryDays(process.env.SHARE_TOKEN_EXPIRY_DAYS);
 
 router.post("/quotations/:id/share-token", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const dataMode = await currentDataMode();
   const { id } = GetQuotationParams.parse(req.params);
 
@@ -943,7 +943,7 @@ router.post("/quotations/:id/share-token", async (req, res) => {
 });
 
 router.delete("/quotations/:id/share-token", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const dataMode = await currentDataMode();
   const { id } = GetQuotationParams.parse(req.params);
 
@@ -966,7 +966,7 @@ router.delete("/quotations/:id/share-token", async (req, res) => {
 });
 
 router.post("/invoices/:id/share-token", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const dataMode = await currentDataMode();
   const { id } = GetInvoiceParams.parse(req.params);
 
@@ -993,7 +993,7 @@ router.post("/invoices/:id/share-token", async (req, res) => {
 });
 
 router.delete("/invoices/:id/share-token", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const dataMode = await currentDataMode();
   const { id } = GetInvoiceParams.parse(req.params);
 

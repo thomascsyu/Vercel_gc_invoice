@@ -11,7 +11,7 @@ import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import { Router, type IRouter } from "express";
 import { z } from "zod/v4";
 import { requireAdmin } from "../../lib/auth/requireAdmin";
-import { type AuthedRequest } from "../../lib/auth/requireAuth";
+import { scopedDataUserId } from "../../lib/auth/scopedUserId";
 import { currentDataMode } from "../../lib/dataMode";
 
 const router: IRouter = Router();
@@ -45,7 +45,7 @@ router.get("/consultants", async (_req, res) => {
 
 /** Monthly invoiced revenue attributed to each consultant. */
 router.get("/consultants/performance", async (req, res) => {
-  const userId = (req as unknown as AuthedRequest).dataUserId!;
+  const userId = scopedDataUserId(req);
   const dataMode = await currentDataMode();
   const rows = await db
     .select({

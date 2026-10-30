@@ -166,12 +166,13 @@ export default function ProposalsPage() {
   const [panelRefreshing, setPanelRefreshing] = useState(false);
   const [createWizardOpen, setCreateWizardOpen] = useState(false);
 
+  // /proposals/new is an alias: hand it to the query-string effect below
+  // (view=list&create=1) so the two effects never fight over pageView.
   useEffect(() => {
     if (pathname === "/proposals/new") {
-      setCreateWizardOpen(true);
-      setPageView("list");
+      setLocation("/proposals?view=list&create=1", { replace: true });
     }
-  }, [pathname]);
+  }, [pathname, setLocation]);
 
   useEffect(() => {
     const params = new URLSearchParams(searchString);
@@ -255,6 +256,17 @@ export default function ProposalsPage() {
 
   const openCreate = () => {
     setCreateWizardOpen(true);
+  };
+
+  const handleCreateWizardOpenChange = (open: boolean) => {
+    setCreateWizardOpen(open);
+    if (open) return;
+    // Drop create=1 so /proposals/new (or the same link) can reopen the wizard later.
+    const params = new URLSearchParams(searchString);
+    if (!params.has("create")) return;
+    params.delete("create");
+    const qs = params.toString();
+    setLocation(qs ? `/proposals?${qs}` : "/proposals", { replace: true });
   };
 
   const openEdit = (id: string) => {
@@ -631,7 +643,7 @@ export default function ProposalsPage() {
         ) : null}
       </ProposalDetailPanel>
 
-      <Dialog open={createWizardOpen} onOpenChange={setCreateWizardOpen}>
+      <Dialog open={createWizardOpen} onOpenChange={handleCreateWizardOpenChange}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>New proposal</DialogTitle>

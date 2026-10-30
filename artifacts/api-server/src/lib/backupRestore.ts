@@ -15,6 +15,7 @@ import {
   quotationsTable,
   receiptsTable,
   recurringInvoicesTable,
+  usersTable,
   type LineItem,
 } from "@workspace/db";
 import { and, eq } from "drizzle-orm";
@@ -504,6 +505,11 @@ export async function restoreUserBackup(options: RestoreBackupOptions): Promise<
       counts.quotationTemplates++;
     }
 
+    // Backups can come from another database: drop creator subs that don't exist here
+    // (the column is a nullable FK; portal alerts then fall back to the workspace owner).
+    const knownUserSubs = new Set(
+      (await tx.select({ googleSub: usersTable.googleSub }).from(usersTable)).map((u) => u.googleSub),
+    );
     for (const { row, consultantIds } of parsed.proposalDocuments) {
       const values = parseDateFields(remapUserId(row, userId), [
         "createdAt",
@@ -516,7 +522,13 @@ export async function restoreUserBackup(options: RestoreBackupOptions): Promise<
       ]);
       const [inserted] = await tx
         .insert(proposalDocumentsTable)
-        .values(values as typeof proposalDocumentsTable.$inferInsert)
+        .values({
+          ...(values as typeof proposalDocumentsTable.$inferInsert),
+          createdByUserId:
+            typeof values.createdByUserId === "string" && knownUserSubs.has(values.createdByUserId)
+              ? values.createdByUserId
+              : null,
+        })
         .returning();
       await replaceConsultantIds(tx, PROPOSAL_CONSULTANTS, inserted.id, consultantIds);
       counts.proposalDocuments++;
@@ -563,7 +575,10 @@ export async function restoreUserBackup(options: RestoreBackupOptions): Promise<
 
       if (parsed.companySettings?.length) {
         for (const row of parsed.companySettings) {
-          const values = parseDateFields(row, ["updatedAt"]);
+          // Never take the workspace owner from a backup: restored rows are written under
+          // the current owner, so switching it here would hide them.
+          const { workspaceDataUserId: _owner, ...rest } = row;
+          const values = parseDateFields(rest, ["updatedAt"]);
           const existing = await tx.select().from(companySettingsTable).limit(1);
           if (existing.length > 0) {
             const { id: _id, ...patch } = values;
